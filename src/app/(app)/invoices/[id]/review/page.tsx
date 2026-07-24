@@ -1,0 +1,111 @@
+import { notFound, redirect } from "next/navigation";
+import { auth } from "@/lib/auth";
+import { db } from "@/lib/db";
+import { ReviewForm } from "./review-form";
+
+type PageProps = {
+  params: Promise<{ id: string }>;
+};
+
+export default async function InvoiceReviewPage({ params }: PageProps) {
+  const { id } = await params;
+  const session = await auth();
+  if (!session?.user) redirect("/login");
+
+  const invoice = await db.invoice.findUnique({
+    where: { id },
+    include: {
+      vendor: true,
+      lineItems: true,
+      category: true,
+    },
+  });
+
+  if (!invoice) notFound();
+
+  if (session.user.role === "STAFF") {
+    const isUploader = invoice.uploadedById === session.user.id;
+    const assignment = await db.projectAssignment.findFirst({
+      where: { userId: session.user.id, projectId: invoice.projectId },
+    });
+    if (!isUploader && !assignment) {
+      redirect("/invoices/upload");
+    }
+  }
+
+  const [vendors, categories, projects] = await Promise.all([
+    db.vendor.findMany({ orderBy: { name: "asc" } }),
+    db.category.findMany({ orderBy: { name: "asc" } }),
+    session.user.role === "STAFF"
+      ? db.project.findMany({
+          where: { assignments: { some: { userId: session.user.id } } },
+          orderBy: { name: "asc" },
+        })
+      : db.project.findMany({ orderBy: { name: "asc" } }),
+  ]);
+
+  const raw = invoice.extractionRaw as
+    | { _normalized?: { lineItemConfidences?: number[] } }
+    | null;
+  const itemConfidences = raw?._normalized?.lineItemConfidences ?? [];
+
+  const duplicate = await db.invoice.findFirst({
+    where: {
+      vendorId: invoice.vendorId,
+      invoiceNumber: invoice.invoiceNumber.replace(/-REVIEW-\d+$/, ""),
+      id: { not: invoice.id },
+    },
+    select: { id: true },
+  });
+
+  // Also flag if number was rewritten with -REVIEW- suffix during upload
+  const possibleDuplicate =
+    Boolean(duplicate) || /-REVIEW-\d+$/.test(invoice.invoiceNumber);
+
+  return (
+    <ReviewForm
+      invoice={{
+        id: invoice.id,
+        invoiceNumber: invoice.invoiceNumber.replace(/-REVIEW-\d+$/, ""),
+        invoiceDate: invoice.invoiceDate.toISOString(),
+        dueDate: invoice.dueDate?.toISOString() ?? null,
+        vendorId: invoice.vendorId,
+        categoryId: invoice.categoryId,
+        projectId: invoice.projectId,
+        subtotal: Number(invoice.subtotal),
+        sgst: Number(invoice.sgst),
+        cgst: Number(invoice.cgst),
+        igst: Number(invoice.igst),
+        total: Number(invoice.total),
+        fileUrl: invoice.fileUrl,
+        status: invoice.status,
+        vendor: {
+          id: invoice.vendor.id,
+          name: invoice.vendor.name,
+          gstin: invoice.vendor.gstin,
+        },
+        lineItems: invoice.lineItems.map((li, i) => ({
+          id: li.id,
+          description: li.description,
+          quantity: Number(li.quantity),
+          unit: li.unit,
+          rateExclGst: Number(li.rateExclGst),
+          gstPercent: Number(li.gstPercent),
+          confidence: itemConfidences[i],
+        })),
+      }}
+      vendors={vendors.map((v) => ({
+        id: v.id,
+        name: v.name,
+        gstin: v.gstin,
+      }))}
+      categories={categories.map((c) => ({
+        id: c.id,
+        name: c.name,
+        unit: c.unit,
+      }))}
+      projects={projects.map((p) => ({ id: p.id, name: p.name }))}
+      possibleDuplicate={possibleDuplicate}
+    />
+  );
+}

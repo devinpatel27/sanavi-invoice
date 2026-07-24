@@ -1,0 +1,60 @@
+import {
+  LayoutDashboard,
+  FileText,
+  Upload,
+  Building2,
+  Boxes,
+  Tags,
+  Wallet,
+  Users,
+  type LucideIcon,
+} from "lucide-react";
+
+export type NavItem = {
+  href: string;
+  label: string;
+  icon: LucideIcon;
+  /** Shown only to ADMIN */
+  adminOnly?: boolean;
+  /** Shown only to STAFF (and ADMIN if not adminOnly) */
+  staffOnly?: boolean;
+};
+
+/**
+ * STAFF: upload + their invoices (pending review / uploads).
+ * ADMIN: full navigation.
+ */
+export const NAV_ITEMS: NavItem[] = [
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, adminOnly: true },
+  { href: "/invoices/upload", label: "Upload Invoice", icon: Upload },
+  { href: "/invoices", label: "My Invoices", icon: FileText, staffOnly: true },
+  { href: "/invoices", label: "Invoices", icon: FileText, adminOnly: true },
+  { href: "/payments", label: "Payments", icon: Wallet, adminOnly: true },
+  { href: "/materials", label: "Rate Sheet", icon: Boxes, adminOnly: true },
+  { href: "/vendors", label: "Vendors", icon: Building2, adminOnly: true },
+  { href: "/categories", label: "Categories", icon: Tags, adminOnly: true },
+  { href: "/users", label: "Users", icon: Users, adminOnly: true },
+];
+
+export function getNavItemsForRole(role: "ADMIN" | "STAFF") {
+  return NAV_ITEMS.filter((item) => {
+    if (item.adminOnly) return role === "ADMIN";
+    if (item.staffOnly) return role === "STAFF";
+    return true;
+  });
+}
+
+/** Paths STAFF may access (prefix match). Everything else redirects to upload. */
+export const STAFF_ALLOWED_PREFIXES = [
+  "/invoices",
+  "/api/invoices",
+];
+
+export const ADMIN_ONLY_PREFIXES = [
+  "/dashboard",
+  "/payments",
+  "/vendors",
+  "/categories",
+  "/materials",
+  "/users",
+];
