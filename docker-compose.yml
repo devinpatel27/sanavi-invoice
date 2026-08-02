@@ -8,7 +8,7 @@ services:
       POSTGRES_PASSWORD: invoice_crm_dev_password
       POSTGRES_DB: invoice_crm
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - invoice_crm_pg_data:/var/lib/postgresql/data
     healthcheck:

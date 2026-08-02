@@ -86,7 +86,7 @@ export async function processInvoiceUpload(params: {
     throw new Error("File must be 20MB or smaller.");
   }
 
-  let resolvedCategoryId: string | null = categoryId?.trim() || null;
+  const resolvedCategoryId: string | null = categoryId?.trim() || null;
   if (resolvedCategoryId) {
     const category = await db.category.findUnique({
       where: { id: resolvedCategoryId },

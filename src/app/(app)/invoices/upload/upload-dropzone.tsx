@@ -72,19 +72,16 @@ export function UploadDropzone({
   const dragDepth = useRef(0);
 
   useEffect(() => {
-    if (!file || !file.type.startsWith("image/")) {
-      setPreviewUrl(null);
-      return;
-    }
-    const url = URL.createObjectURL(file);
-    setPreviewUrl(url);
-    return () => URL.revokeObjectURL(url);
-  }, [file]);
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
 
   const pickFile = useCallback((next: File | null) => {
     setError(null);
     if (!next) {
       setFile(null);
+      setPreviewUrl(null);
       return;
     }
     if (!isAllowedFile(next)) {
@@ -98,6 +95,9 @@ export function UploadDropzone({
       return;
     }
     setFile(next);
+    setPreviewUrl(
+      next.type.startsWith("image/") ? URL.createObjectURL(next) : null
+    );
     setStage("idle");
   }, []);
 
@@ -393,6 +393,7 @@ export function UploadDropzone({
               onClick={(e) => {
                 e.stopPropagation();
                 setFile(null);
+                setPreviewUrl(null);
                 setError(null);
                 setStage("idle");
               }}

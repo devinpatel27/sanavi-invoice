@@ -7,12 +7,31 @@ import {
 
 let cachedClient: DocumentAnalysisClient | null = null;
 
-function getClient() {
+function getEndpointAndKey() {
   const endpoint = process.env.AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT?.trim();
   const key = process.env.AZURE_DOCUMENT_INTELLIGENCE_KEY?.trim();
+  return { endpoint, key };
+}
+
+function isValidEndpointUrl(endpoint: string) {
+  try {
+    const url = new URL(endpoint);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function getClient() {
+  const { endpoint, key } = getEndpointAndKey();
   if (!endpoint || !key) {
     throw new Error(
       "AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT / AZURE_DOCUMENT_INTELLIGENCE_KEY are not set. Provision Azure Document Intelligence and add them to .env."
+    );
+  }
+  if (!isValidEndpointUrl(endpoint)) {
+    throw new Error(
+      `AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT must be a full URL (e.g. https://<resource>.cognitiveservices.azure.com/), got "${endpoint.slice(0, 32)}…".`
     );
   }
   if (!cachedClient) {
@@ -25,10 +44,8 @@ function getClient() {
 }
 
 export function isDocumentIntelligenceConfigured() {
-  return Boolean(
-    process.env.AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT?.trim() &&
-      process.env.AZURE_DOCUMENT_INTELLIGENCE_KEY?.trim()
-  );
+  const { endpoint, key } = getEndpointAndKey();
+  return Boolean(endpoint && key && isValidEndpointUrl(endpoint));
 }
 
 export type ExtractedInvoiceLineItem = {
