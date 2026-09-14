@@ -44,9 +44,9 @@ export default async function UploadInvoicePage() {
   ]);
 
   return (
-    <div className="mx-auto flex w-full max-w-xl flex-col gap-5 sm:max-w-2xl sm:gap-6">
-      <div className="space-y-2">
-        <h1 className="text-[1.65rem] leading-tight font-semibold tracking-tight sm:text-3xl">
+    <div className="mx-auto flex w-full max-w-xl flex-col gap-4 px-0 sm:max-w-2xl sm:gap-6">
+      <div className="space-y-1.5 sm:space-y-2">
+        <h1 className="text-[1.5rem] leading-tight font-semibold tracking-tight sm:text-3xl">
           {isStaff ? "Upload an invoice" : "Upload invoice"}
         </h1>
         <p className="max-w-prose text-sm leading-relaxed text-muted-foreground sm:text-[0.95rem]">
@@ -59,7 +59,7 @@ export default async function UploadInvoicePage() {
       {isStaff && pendingCount > 0 && (
         <Link
           href="/invoices"
-          className="flex items-center justify-between gap-3 rounded-2xl border bg-card px-4 py-3.5 transition-all duration-200 hover:border-foreground/20 hover:shadow-sm active:scale-[0.99]"
+          className="flex items-center justify-between gap-3 rounded-2xl border bg-card px-3.5 py-3 transition-all duration-200 hover:border-foreground/20 hover:shadow-sm active:scale-[0.99] sm:px-4 sm:py-3.5"
         >
           <div className="flex min-w-0 items-center gap-3">
             <div className="rounded-xl bg-muted p-2.5">
@@ -77,8 +77,8 @@ export default async function UploadInvoicePage() {
       )}
 
       <Card className="overflow-hidden rounded-2xl border bg-card shadow-sm">
-        <CardHeader className="space-y-1.5 px-4 pt-5 pb-3 sm:px-6 sm:pt-6">
-          <CardTitle className="text-lg">New invoice</CardTitle>
+        <CardHeader className="space-y-1.5 px-4 pt-4 pb-2.5 sm:px-6 sm:pt-6 sm:pb-3">
+          <CardTitle className="text-base sm:text-lg">New invoice</CardTitle>
           <CardDescription className="text-xs leading-relaxed sm:text-sm">
             PDF, JPG, or PNG — max 20MB
             {!blobConfigured && (
@@ -89,7 +89,7 @@ export default async function UploadInvoicePage() {
             )}
           </CardDescription>
         </CardHeader>
-        <CardContent className="px-4 pb-5 sm:px-6 sm:pb-6">
+        <CardContent className="px-4 pb-4 sm:px-6 sm:pb-6">
           {!diConfigured ? (
             <div className="rounded-2xl border border-dashed px-4 py-10 text-center">
               <p className="text-sm font-medium">
@@ -107,7 +107,7 @@ export default async function UploadInvoicePage() {
       </Card>
 
       {isStaff && (
-        <div className="flex justify-center pb-6">
+        <div className="flex justify-center pb-4 sm:pb-6">
           <Button
             variant="ghost"
             size="sm"

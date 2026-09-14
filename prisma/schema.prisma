@@ -129,6 +129,7 @@ model Invoice {
 
   paymentTerms String?
   status       InvoiceStatus @default(PROCESSING)
+  paidAt       DateTime? // set when marked PAID; cleared when marked UNPAID
 
   fileUrl       String // original uploaded PDF/image in Azure Blob Storage
   extractionRaw Json? // raw Azure Document Intelligence response, for audit

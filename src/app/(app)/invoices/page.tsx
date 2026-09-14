@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -19,6 +20,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { FileText, Upload } from "lucide-react";
+import type { Prisma } from "@/generated/prisma/client";
+import { invoiceAccessWhere } from "@/lib/invoices/access";
+import { InvoiceFilters } from "./invoice-filters";
+import { InvoicePaymentControls } from "./invoice-payment-controls";
+import { InvoiceDeleteButton } from "./invoice-delete-button";
+import { InvoiceFilePreview } from "@/components/invoice-file-preview";
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("en-IN", {
@@ -40,7 +47,16 @@ const STATUS_VARIANT: Record<
   OVERDUE: "destructive",
 };
 
-type SearchParams = Promise<{ confirmed?: string }>;
+type SearchParams = Promise<{
+  confirmed?: string;
+  updated?: string;
+  q?: string;
+  vendorId?: string;
+  categoryId?: string;
+  status?: string;
+  from?: string;
+  to?: string;
+}>;
 
 export default async function InvoicesPage({
   searchParams,
@@ -48,27 +64,76 @@ export default async function InvoicesPage({
   searchParams: SearchParams;
 }) {
   const session = await auth();
-  const { confirmed } = await searchParams;
-  const isStaff = session?.user.role === "STAFF";
+  if (!session?.user) return null;
 
-  const where = isStaff
-    ? {
-        OR: [
-          { uploadedById: session!.user.id },
-          {
-            status: "NEEDS_REVIEW" as const,
-            project: { assignments: { some: { userId: session!.user.id } } },
-          },
-        ],
-      }
-    : {};
+  const params = await searchParams;
+  const isStaff = session.user.role === "STAFF";
 
-  const invoices = await db.invoice.findMany({
-    where,
-    include: { vendor: true, project: true, category: true },
-    orderBy: [{ status: "asc" }, { invoiceDate: "desc" }],
-    take: 50,
+  const accessWhere = invoiceAccessWhere({
+    id: session.user.id,
+    role: session.user.role,
   });
+
+  const andFilters: Prisma.InvoiceWhereInput[] = [];
+  if (params.vendorId) andFilters.push({ vendorId: params.vendorId });
+  if (params.categoryId) andFilters.push({ categoryId: params.categoryId });
+  if (params.status) {
+    andFilters.push({
+      status: params.status as
+        | "PROCESSING"
+        | "NEEDS_REVIEW"
+        | "UNPAID"
+        | "PARTIALLY_PAID"
+        | "PAID"
+        | "OVERDUE",
+    });
+  }
+  if (params.q?.trim()) {
+    const q = params.q.trim();
+    andFilters.push({
+      OR: [
+        { invoiceNumber: { contains: q, mode: "insensitive" } },
+        { vendor: { name: { contains: q, mode: "insensitive" } } },
+      ],
+    });
+  }
+  if (params.from) {
+    andFilters.push({ invoiceDate: { gte: new Date(params.from) } });
+  }
+  if (params.to) {
+    const end = new Date(params.to);
+    end.setHours(23, 59, 59, 999);
+    andFilters.push({ invoiceDate: { lte: end } });
+  }
+
+  const where: Prisma.InvoiceWhereInput = {
+    AND: [
+      accessWhere,
+      ...(andFilters.length > 0 ? andFilters : []),
+    ],
+  };
+
+  const [invoices, vendors, categories] = await Promise.all([
+    db.invoice.findMany({
+      where,
+      include: {
+        vendor: true,
+        project: true,
+        category: true,
+        payments: { select: { amount: true } },
+      },
+      orderBy: [{ status: "asc" }, { invoiceDate: "desc" }],
+      take: 100,
+    }),
+    db.vendor.findMany({
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
+    }),
+    db.category.findMany({
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
+    }),
+  ]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -80,7 +145,7 @@ export default async function InvoicesPage({
           <p className="mt-1 text-sm text-muted-foreground">
             {isStaff
               ? "Uploads and drafts awaiting your review."
-              : "All material purchase invoices across projects."}
+              : "Filter by vendor, category, status, and date."}
           </p>
         </div>
         <Button
@@ -93,11 +158,21 @@ export default async function InvoicesPage({
         </Button>
       </div>
 
-      {confirmed && (
+      {params.confirmed && (
         <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100">
           Invoice confirmed and saved as unpaid.
         </div>
       )}
+
+      {params.updated && (
+        <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-100">
+          Invoice changes saved successfully.
+        </div>
+      )}
+
+      <Suspense fallback={null}>
+        <InvoiceFilters vendors={vendors} categories={categories} />
+      </Suspense>
 
       <Card className="transition-shadow duration-200 hover:shadow-sm">
         <CardHeader>
@@ -113,9 +188,9 @@ export default async function InvoicesPage({
                 <FileText className="size-7 text-muted-foreground" />
               </div>
               <div>
-                <p className="text-sm font-medium">No invoices yet</p>
+                <p className="text-sm font-medium">No invoices match</p>
                 <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-                  Upload a purchase invoice to extract fields and start a review.
+                  Try clearing filters or upload a purchase invoice.
                 </p>
               </div>
               <Button
@@ -128,47 +203,79 @@ export default async function InvoicesPage({
             </div>
           ) : (
             <>
-              {/* Mobile cards */}
               <div className="space-y-3 md:hidden">
                 {invoices.map((invoice) => (
-                  <Link
+                  <div
                     key={invoice.id}
-                    href={
-                      invoice.status === "NEEDS_REVIEW" ||
-                      invoice.status === "PROCESSING"
-                        ? `/invoices/${invoice.id}/review`
-                        : `/invoices/${invoice.id}/review`
-                    }
-                    className="block rounded-xl border bg-card p-4 transition-all duration-200 hover:border-foreground/20 hover:shadow-sm active:scale-[0.99]"
+                    className="rounded-xl border bg-card p-4 shadow-sm"
                   >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="truncate font-medium">
-                          {invoice.invoiceNumber}
-                        </p>
-                        <p className="truncate text-sm text-muted-foreground">
-                          {invoice.vendor.name}
-                        </p>
+                    <Link
+                      href={`/invoices/${invoice.id}/review`}
+                      className="block"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="truncate font-medium">
+                            {invoice.invoiceNumber}
+                          </p>
+                          <p className="truncate text-sm text-muted-foreground">
+                            {invoice.vendor.name}
+                            {invoice.category?.name
+                              ? ` · ${invoice.category.name}`
+                              : ""}
+                          </p>
+                        </div>
+                        <Badge
+                          variant={STATUS_VARIANT[invoice.status] ?? "outline"}
+                        >
+                          {invoice.status.replace("_", " ")}
+                        </Badge>
                       </div>
-                      <Badge
-                        variant={STATUS_VARIANT[invoice.status] ?? "outline"}
-                      >
-                        {invoice.status.replace("_", " ")}
-                      </Badge>
+                      <div className="mt-3 flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">
+                          {invoice.invoiceDate.toLocaleDateString("en-IN")}
+                        </span>
+                        <span className="font-medium">
+                          {formatCurrency(Number(invoice.total))}
+                        </span>
+                      </div>
+                    </Link>
+                    <div className="mt-3 space-y-2 border-t pt-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <InvoiceFilePreview
+                          invoiceId={invoice.id}
+                          fileUrl={invoice.fileUrl}
+                          className="min-w-0 flex-1 max-w-full overflow-hidden"
+                        />
+                        {(!isStaff || invoice.uploadedById === session.user.id) && (
+                          <div className="shrink-0 pt-0.5">
+                            <InvoiceDeleteButton
+                              invoiceId={invoice.id}
+                              invoiceNumber={invoice.invoiceNumber}
+                              vendorName={invoice.vendor.name}
+                            />
+                          </div>
+                        )}
+                      </div>
+                      <InvoicePaymentControls
+                        invoiceId={invoice.id}
+                        status={invoice.status}
+                        paidAt={invoice.paidAt?.toISOString() ?? null}
+                        invoiceNumber={invoice.invoiceNumber}
+                        vendorName={invoice.vendor.name}
+                        categoryName={invoice.category?.name ?? null}
+                        total={Number(invoice.total)}
+                        paidAmount={invoice.payments.reduce(
+                          (sum, payment) => sum + Number(payment.amount),
+                          0
+                        )}
+                        compact
+                      />
                     </div>
-                    <div className="mt-3 flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">
-                        {invoice.invoiceDate.toLocaleDateString("en-IN")}
-                      </span>
-                      <span className="font-medium">
-                        {formatCurrency(Number(invoice.total))}
-                      </span>
-                    </div>
-                  </Link>
+                  </div>
                 ))}
               </div>
 
-              {/* Desktop table */}
               <div className="hidden overflow-x-auto md:block">
                 <Table>
                   <TableHeader>
@@ -180,6 +287,8 @@ export default async function InvoicesPage({
                       <TableHead>Date</TableHead>
                       <TableHead className="text-right">Total</TableHead>
                       <TableHead>Status</TableHead>
+                      <TableHead>Paid at</TableHead>
+                      <TableHead>File</TableHead>
                       <TableHead />
                     </TableRow>
                   </TableHeader>
@@ -212,22 +321,63 @@ export default async function InvoicesPage({
                             {invoice.status.replace("_", " ")}
                           </Badge>
                         </TableCell>
+                        <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                          {invoice.paidAt
+                            ? invoice.paidAt.toLocaleString("en-IN", {
+                                day: "2-digit",
+                                month: "short",
+                                year: "numeric",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })
+                            : "—"}
+                        </TableCell>
+                        <TableCell>
+                          <InvoiceFilePreview
+                            invoiceId={invoice.id}
+                            fileUrl={invoice.fileUrl}
+                            compact
+                          />
+                        </TableCell>
                         <TableCell className="text-right">
-                          {(invoice.status === "NEEDS_REVIEW" ||
-                            invoice.status === "PROCESSING") && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              nativeButton={false}
-                              render={
-                                <Link
-                                  href={`/invoices/${invoice.id}/review`}
+                          <div className="flex flex-col items-end gap-2">
+                            <div className="flex items-center gap-1.5">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                nativeButton={false}
+                                render={
+                                  <Link href={`/invoices/${invoice.id}/review`} />
+                                }
+                              >
+                                {invoice.status === "NEEDS_REVIEW" ||
+                                invoice.status === "PROCESSING"
+                                  ? "Review"
+                                  : "Edit"}
+                              </Button>
+                              {(!isStaff || invoice.uploadedById === session.user.id) && (
+                                <InvoiceDeleteButton
+                                  invoiceId={invoice.id}
+                                  invoiceNumber={invoice.invoiceNumber}
+                                  vendorName={invoice.vendor.name}
                                 />
-                              }
-                            >
-                              Review
-                            </Button>
-                          )}
+                              )}
+                            </div>
+                            <InvoicePaymentControls
+                              invoiceId={invoice.id}
+                              status={invoice.status}
+                              paidAt={invoice.paidAt?.toISOString() ?? null}
+                              invoiceNumber={invoice.invoiceNumber}
+                              vendorName={invoice.vendor.name}
+                              categoryName={invoice.category?.name ?? null}
+                              total={Number(invoice.total)}
+                              paidAmount={invoice.payments.reduce(
+                                (sum, payment) => sum + Number(payment.amount),
+                                0
+                              )}
+                              compact
+                            />
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}

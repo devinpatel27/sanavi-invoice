@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   Camera,
@@ -70,6 +70,15 @@ export function UploadDropzone({
   const [stage, setStage] = useState<Stage>("idle");
   const [error, setError] = useState<string | null>(null);
   const dragDepth = useRef(0);
+
+  const categoryItems = useMemo(
+    () => categories.map((c) => ({ value: c.id, label: c.name })),
+    [categories]
+  );
+  const selectedCategory = useMemo(
+    () => categories.find((c) => c.id === categoryId) ?? null,
+    [categories, categoryId]
+  );
 
   useEffect(() => {
     return () => {
@@ -219,10 +228,11 @@ export function UploadDropzone({
     file?.type === "application/pdf" ||
     file?.name.toLowerCase().endsWith(".pdf");
   const canExtract = Boolean(file && categoryId && !busy);
+  const hasCategories = categories.length > 0;
 
   return (
-    <div className="flex flex-col gap-6">
-      <section className="space-y-4">
+    <div className="flex flex-col gap-5 sm:gap-6">
+      <section className="space-y-3 sm:space-y-4">
         <div className="grid gap-2">
           <Label htmlFor="upload-category" className="text-sm font-medium">
             Invoice category <span className="text-destructive">*</span>
@@ -230,7 +240,8 @@ export function UploadDropzone({
           <Select
             value={categoryId || null}
             onValueChange={(value) => setCategoryId(value ?? "")}
-            disabled={busy || categories.length === 0}
+            items={categoryItems}
+            disabled={busy || !hasCategories}
           >
             <SelectTrigger
               id="upload-category"
@@ -239,7 +250,7 @@ export function UploadDropzone({
             >
               <SelectValue placeholder="Select category…" />
             </SelectTrigger>
-            <SelectContent align="start">
+            <SelectContent align="start" alignItemWithTrigger={false}>
               {categories.map((category) => (
                 <SelectItem key={category.id} value={category.id}>
                   {category.name}
@@ -247,26 +258,39 @@ export function UploadDropzone({
               ))}
             </SelectContent>
           </Select>
-          <p className="text-xs leading-relaxed text-muted-foreground">
-            Pick the material type for this invoice. You can change it later on
-            the review screen.
-          </p>
+          {!hasCategories ? (
+            <p className="text-xs leading-relaxed text-amber-700 dark:text-amber-400">
+              No categories yet — create one below to continue.
+            </p>
+          ) : selectedCategory ? (
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              Selected:{" "}
+              <span className="font-medium text-foreground">
+                {selectedCategory.name}
+              </span>
+              . You can change this later on review.
+            </p>
+          ) : (
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              Pick the material type for this invoice.
+            </p>
+          )}
         </div>
 
-        <div className="flex flex-col gap-2.5 sm:flex-row sm:items-end">
-          <div className="grid flex-1 gap-2">
-            <Label
-              htmlFor="new-category"
-              className="text-xs font-medium text-muted-foreground"
-            >
-              Or create a new category
-            </Label>
+        <div className="space-y-1.5">
+          <Label
+            htmlFor="new-category"
+            className="text-xs font-medium text-muted-foreground"
+          >
+            Or create a new category
+          </Label>
+          <div className="flex gap-2">
             <Input
               id="new-category"
               value={newCategoryName}
               disabled={busy || creatingCategory}
               placeholder="e.g. Tile Adhesive"
-              className="h-12 rounded-xl sm:h-11"
+              className="h-11 flex-1 rounded-xl"
               onChange={(e) => setNewCategoryName(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
@@ -275,27 +299,28 @@ export function UploadDropzone({
                 }
               }}
             />
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11 shrink-0 gap-1.5 rounded-xl px-4 font-medium"
+              disabled={busy || creatingCategory || !newCategoryName.trim()}
+              onClick={handleCreateCategory}
+            >
+              {creatingCategory ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Plus className="size-4" />
+              )}
+              Add
+            </Button>
           </div>
-          <Button
-            type="button"
-            variant="outline"
-            className="h-12 w-full gap-1.5 rounded-xl sm:h-11 sm:w-auto sm:min-w-24"
-            disabled={busy || creatingCategory || !newCategoryName.trim()}
-            onClick={handleCreateCategory}
-          >
-            {creatingCategory ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : (
-              <Plus className="size-4" />
-            )}
-            Add
-          </Button>
         </div>
       </section>
 
       <div
         role="button"
         tabIndex={0}
+        aria-label="Upload invoice file"
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
@@ -310,7 +335,7 @@ export function UploadDropzone({
           if (!busy) inputRef.current?.click();
         }}
         className={cn(
-          "relative flex min-h-[200px] cursor-pointer flex-col items-center justify-center gap-3 overflow-hidden rounded-2xl border-2 border-dashed px-5 py-8 text-center transition-all duration-300 sm:min-h-[240px] sm:px-8 sm:py-10",
+          "relative flex min-h-[180px] cursor-pointer flex-col items-center justify-center gap-3 overflow-hidden rounded-2xl border-2 border-dashed px-4 py-7 text-center transition-all duration-300 sm:min-h-[220px] sm:px-8 sm:py-10",
           dragging &&
             "scale-[1.01] border-primary bg-primary/5 shadow-md ring-4 ring-primary/10",
           !dragging && !busy && "hover:border-foreground/25 hover:bg-muted/40",
@@ -362,13 +387,13 @@ export function UploadDropzone({
             </div>
           </div>
         ) : file ? (
-          <div className="flex w-full max-w-md flex-col items-center gap-3">
+          <div className="flex w-full max-w-md flex-col items-center gap-3 px-1">
             {previewUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={previewUrl}
                 alt="Invoice preview"
-                className="max-h-40 rounded-lg border object-contain shadow-sm transition-transform duration-300"
+                className="max-h-36 w-full rounded-lg border object-contain shadow-sm transition-transform duration-300 sm:max-h-44"
               />
             ) : (
               <div className="rounded-full bg-muted p-4">
@@ -379,7 +404,7 @@ export function UploadDropzone({
                 )}
               </div>
             )}
-            <div className="min-w-0 space-y-1">
+            <div className="min-w-0 space-y-1 px-2">
               <p className="truncate text-sm font-semibold">{file.name}</p>
               <p className="text-xs text-muted-foreground">
                 {formatBytes(file.size)} · Ready to extract
@@ -396,6 +421,8 @@ export function UploadDropzone({
                 setPreviewUrl(null);
                 setError(null);
                 setStage("idle");
+                if (inputRef.current) inputRef.current.value = "";
+                if (cameraRef.current) cameraRef.current.value = "";
               }}
             >
               <X className="size-3.5" />
@@ -412,18 +439,46 @@ export function UploadDropzone({
             >
               <UploadCloud
                 className={cn(
-                  "size-10 text-muted-foreground transition-colors",
+                  "size-8 text-muted-foreground transition-colors sm:size-10",
                   dragging && "text-primary"
                 )}
               />
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-1 px-1">
               <p className="text-base font-semibold tracking-tight sm:text-lg">
                 {dragging ? "Drop to upload" : "Drag & drop your invoice"}
               </p>
-              <p className="text-sm text-muted-foreground">
-                or tap to browse · PDF, JPG, PNG · max 20MB
+              <p className="text-xs text-muted-foreground sm:text-sm">
+                Supports PDF, JPG, PNG up to 20MB
               </p>
+            </div>
+            <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                className="h-9 gap-1.5 rounded-xl px-3.5 text-xs font-medium"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  inputRef.current?.click();
+                }}
+              >
+                <FileText className="size-3.5" />
+                Browse files
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-9 gap-1.5 rounded-xl px-3.5 text-xs font-medium"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  cameraRef.current?.click();
+                }}
+              >
+                <Camera className="size-3.5" />
+                Use camera
+              </Button>
             </div>
           </>
         )}
@@ -449,27 +504,19 @@ export function UploadDropzone({
       </div>
 
       {error && (
-        <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm leading-relaxed text-destructive">
+        <div
+          role="alert"
+          className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm leading-relaxed text-destructive"
+        >
           {error}
         </div>
       )}
 
-      <div className="flex flex-col gap-3 pb-1">
-        <Button
-          type="button"
-          variant="outline"
-          size="lg"
-          className="h-12 w-full gap-2 rounded-xl"
-          disabled={busy}
-          onClick={() => cameraRef.current?.click()}
-        >
-          <Camera className="size-4" />
-          Take photo
-        </Button>
+      <div className="pt-1">
         <Button
           type="button"
           size="lg"
-          className="h-12 w-full rounded-xl"
+          className="h-12 w-full gap-2 rounded-xl text-sm font-semibold shadow-sm transition-all"
           disabled={!canExtract}
           onClick={() => void handleUpload()}
         >
@@ -477,17 +524,23 @@ export function UploadDropzone({
             <>
               <Loader2 className="size-4 animate-spin" />
               {stage === "uploading"
-                ? "Uploading…"
+                ? "Uploading file…"
                 : stage === "extracting"
-                  ? "Extracting…"
-                  : "Opening…"}
+                  ? "Extracting invoice with AI…"
+                  : "Opening review…"}
+            </>
+          ) : !file ? (
+            <>
+              <UploadCloud className="size-4" />
+              Select or snap an invoice to extract
             </>
           ) : !categoryId ? (
-            "Select category first"
-          ) : !file ? (
-            "Choose a file first"
+            "Select category above to continue"
           ) : (
-            "Extract invoice data"
+            <>
+              <UploadCloud className="size-4" />
+              Extract invoice data
+            </>
           )}
         </Button>
       </div>

@@ -88,42 +88,88 @@ export default async function MaterialsPage() {
               invoice line items, or you can pre-seed them.
             </p>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Category</TableHead>
-                  <TableHead>Material</TableHead>
-                  <TableHead>Unit</TableHead>
-                  <TableHead className="text-right">Avg rate (incl. GST)</TableHead>
-                  <TableHead className="text-right">Purchases</TableHead>
-                  <TableHead>Last purchased</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+            <>
+              {/* Mobile View: Cards */}
+              <div className="space-y-3 md:hidden">
                 {rows.map((row) => (
-                  <TableRow key={row.id}>
-                    <TableCell className="text-muted-foreground">
-                      {row.category}
-                    </TableCell>
-                    <TableCell className="font-medium">{row.name}</TableCell>
-                    <TableCell>{row.unit}</TableCell>
-                    <TableCell className="text-right">
-                      {row.avgRateInclGst !== null
-                        ? formatCurrency(row.avgRateInclGst)
-                        : "—"}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {row.purchaseCount}
-                    </TableCell>
-                    <TableCell>
-                      {row.lastPurchased
-                        ? row.lastPurchased.toLocaleDateString("en-IN")
-                        : "—"}
-                    </TableCell>
-                  </TableRow>
+                  <div
+                    key={row.id}
+                    className="rounded-xl border bg-card p-3.5 shadow-sm space-y-2"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="font-semibold text-sm text-foreground">
+                          {row.name}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {row.category} · {row.unit}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-semibold text-sm tabular-nums text-foreground">
+                          {row.avgRateInclGst !== null
+                            ? formatCurrency(row.avgRateInclGst)
+                            : "—"}
+                        </p>
+                        <p className="text-[10px] text-muted-foreground">
+                          Avg incl. GST
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between text-xs pt-1 border-t border-border/60 text-muted-foreground">
+                      <span>{row.purchaseCount} purchase(s)</span>
+                      <span>
+                        Last:{" "}
+                        {row.lastPurchased
+                          ? row.lastPurchased.toLocaleDateString("en-IN")
+                          : "—"}
+                      </span>
+                    </div>
+                  </div>
                 ))}
-              </TableBody>
-            </Table>
+              </div>
+
+              {/* Desktop View: Table */}
+              <div className="hidden overflow-x-auto md:block">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Category</TableHead>
+                      <TableHead>Material</TableHead>
+                      <TableHead>Unit</TableHead>
+                      <TableHead className="text-right">Avg rate (incl. GST)</TableHead>
+                      <TableHead className="text-right">Purchases</TableHead>
+                      <TableHead>Last purchased</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {rows.map((row) => (
+                      <TableRow key={row.id}>
+                        <TableCell className="text-muted-foreground">
+                          {row.category}
+                        </TableCell>
+                        <TableCell className="font-medium">{row.name}</TableCell>
+                        <TableCell>{row.unit}</TableCell>
+                        <TableCell className="text-right">
+                          {row.avgRateInclGst !== null
+                            ? formatCurrency(row.avgRateInclGst)
+                            : "—"}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {row.purchaseCount}
+                        </TableCell>
+                        <TableCell>
+                          {row.lastPurchased
+                            ? row.lastPurchased.toLocaleDateString("en-IN")
+                            : "—"}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>

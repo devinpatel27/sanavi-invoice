@@ -1,18 +1,12 @@
 "use client";
 
-import { useState } from "react";
-import { LogOut, Menu } from "lucide-react";
+import { LogOut } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { AppNav } from "@/components/app-nav";
+import { MobileBottomBar } from "@/components/mobile-bottom-bar";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
 
 type AppShellProps = {
   role: "ADMIN" | "STAFF";
@@ -22,7 +16,6 @@ type AppShellProps = {
 };
 
 export function AppShell({ role, name, email, children }: AppShellProps) {
-  const [mobileOpen, setMobileOpen] = useState(false);
   const initials = name
     .split(" ")
     .map((part) => part[0])
@@ -32,6 +25,7 @@ export function AppShell({ role, name, email, children }: AppShellProps) {
 
   return (
     <div className="flex min-h-dvh bg-muted/30">
+      {/* Desktop Sidebar (visible on md and up) */}
       <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col border-r border-sidebar-border bg-sidebar md:flex">
         <div className="border-b border-sidebar-border px-5 py-5">
           <p className="text-base font-semibold tracking-tight text-sidebar-foreground">
@@ -45,46 +39,29 @@ export function AppShell({ role, name, email, children }: AppShellProps) {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-40 flex h-14 items-center gap-2 border-b bg-background/95 px-4 backdrop-blur supports-backdrop-filter:bg-background/80 sm:gap-3 sm:px-6">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="shrink-0 md:hidden"
-            aria-label="Open menu"
-            onClick={() => setMobileOpen(true)}
-          >
-            <Menu className="size-5" />
-          </Button>
-
-          <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-            <SheetContent side="left" className="w-[min(100%,18rem)] p-0">
-              <SheetHeader className="border-b px-5 py-5 text-left">
-                <SheetTitle className="text-base font-semibold">
-                  Sanvicasa
-                </SheetTitle>
-                <p className="text-xs text-muted-foreground">
-                  Invoice &amp; Billing
-                </p>
-              </SheetHeader>
-              <div className="p-3">
-                <AppNav role={role} onNavigate={() => setMobileOpen(false)} />
-              </div>
-            </SheetContent>
-          </Sheet>
-
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold md:hidden">Sanvicasa</p>
+        {/* Top Header */}
+        <header className="sticky top-0 z-40 flex h-14 items-center justify-between gap-2 border-b bg-background/95 px-4 backdrop-blur supports-backdrop-filter:bg-background/80 sm:gap-3 sm:px-6">
+          <div className="flex items-center gap-2.5 min-w-0">
+            {/* Mobile App Brand Title */}
+            <div className="md:hidden">
+              <p className="text-base font-bold tracking-tight text-foreground">
+                Sanvicasa
+              </p>
+              <p className="text-[10px] text-muted-foreground -mt-1">
+                Invoice &amp; Billing
+              </p>
+            </div>
           </div>
 
-          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2.5">
+          <div className="flex shrink-0 items-center gap-2 sm:gap-2.5">
             <Badge
               variant="secondary"
-              className="hidden xs:inline-flex sm:inline-flex"
+              className="text-[11px] font-semibold"
             >
               {role}
             </Badge>
             <Avatar className="size-8 shrink-0">
-              <AvatarFallback className="text-xs">{initials}</AvatarFallback>
+              <AvatarFallback className="text-xs font-semibold">{initials}</AvatarFallback>
             </Avatar>
             <div className="hidden min-w-0 text-right lg:block">
               <p className="truncate text-sm font-medium leading-none">{name}</p>
@@ -110,10 +87,14 @@ export function AppShell({ role, name, email, children }: AppShellProps) {
           </div>
         </header>
 
-        <main className="flex-1 px-4 py-5 sm:px-6 sm:py-6 lg:px-8">
+        {/* Main Content with bottom padding on mobile for MobileBottomBar */}
+        <main className="flex-1 px-4 py-5 pb-28 sm:px-6 sm:py-6 sm:pb-8 lg:px-8">
           {children}
         </main>
       </div>
+
+      {/* Mobile Bottom Navigation Bar (visible only on mobile) */}
+      <MobileBottomBar role={role} name={name} email={email} />
     </div>
   );
 }

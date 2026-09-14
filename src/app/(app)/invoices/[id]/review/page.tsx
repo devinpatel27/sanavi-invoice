@@ -18,6 +18,7 @@ export default async function InvoiceReviewPage({ params }: PageProps) {
       vendor: true,
       lineItems: true,
       category: true,
+      payments: { select: { amount: true } },
     },
   });
 
@@ -71,6 +72,7 @@ export default async function InvoiceReviewPage({ params }: PageProps) {
         dueDate: invoice.dueDate?.toISOString() ?? null,
         vendorId: invoice.vendorId,
         categoryId: invoice.categoryId,
+        categoryName: invoice.category?.name ?? null,
         projectId: invoice.projectId,
         subtotal: Number(invoice.subtotal),
         sgst: Number(invoice.sgst),
@@ -79,6 +81,11 @@ export default async function InvoiceReviewPage({ params }: PageProps) {
         total: Number(invoice.total),
         fileUrl: invoice.fileUrl,
         status: invoice.status,
+        paidAt: invoice.paidAt?.toISOString() ?? null,
+        paidAmount: invoice.payments.reduce(
+          (sum, payment) => sum + Number(payment.amount),
+          0
+        ),
         vendor: {
           id: invoice.vendor.id,
           name: invoice.vendor.name,

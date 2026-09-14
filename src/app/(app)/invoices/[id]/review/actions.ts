@@ -48,7 +48,10 @@ async function assertCanReview(invoiceId: string) {
 
   const invoice = await db.invoice.findUnique({
     where: { id: invoiceId },
-    include: { lineItems: true },
+    include: {
+      lineItems: true,
+      payments: { orderBy: { paidOn: "desc" } },
+    },
   });
   if (!invoice) throw new Error("Invoice not found");
 
@@ -130,9 +133,8 @@ export async function confirmInvoiceReview(raw: ConfirmInvoiceInput) {
   const parsed = confirmSchema.parse(raw);
   const { session, invoice } = await assertCanReview(parsed.invoiceId);
 
-  if (invoice.status !== "NEEDS_REVIEW" && invoice.status !== "PROCESSING") {
-    throw new Error("This invoice has already been confirmed.");
-  }
+  const wasDraft =
+    invoice.status === "NEEDS_REVIEW" || invoice.status === "PROCESSING";
 
   let vendorId = parsed.vendorId ?? null;
   if (!vendorId) {
@@ -213,6 +215,20 @@ export async function confirmInvoiceReview(raw: ConfirmInvoiceInput) {
       });
     }
 
+    const paidAmount = invoice.payments.reduce(
+      (sum, payment) => sum + Number(payment.amount),
+      0
+    );
+    const nextStatus = wasDraft
+      ? "UNPAID"
+      : paidAmount >= parsed.total - 0.01
+        ? "PAID"
+        : paidAmount > 0
+          ? "PARTIALLY_PAID"
+          : parsed.dueDate && new Date(parsed.dueDate) < new Date()
+            ? "OVERDUE"
+            : "UNPAID";
+
     await tx.invoice.update({
       where: { id: invoice.id },
       data: {
@@ -227,7 +243,11 @@ export async function confirmInvoiceReview(raw: ConfirmInvoiceInput) {
         cgst: d(parsed.cgst),
         igst: d(parsed.igst),
         total: d(parsed.total),
-        status: "UNPAID",
+        status: nextStatus,
+        paidAt:
+          nextStatus === "PAID"
+            ? invoice.paidAt ?? invoice.payments[0]?.paidOn ?? new Date()
+            : null,
         reviewedById: session.user.id,
         reviewedAt: new Date(),
       },
@@ -237,5 +257,9 @@ export async function confirmInvoiceReview(raw: ConfirmInvoiceInput) {
   revalidatePath("/invoices");
   revalidatePath("/dashboard");
   revalidatePath(`/invoices/${invoice.id}/review`);
-  redirect(`/invoices?confirmed=${invoice.id}`);
+  redirect(
+    wasDraft
+      ? `/invoices?confirmed=${invoice.id}`
+      : `/invoices?updated=${invoice.id}`
+  );
 }

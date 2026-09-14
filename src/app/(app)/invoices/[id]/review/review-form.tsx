@@ -28,6 +28,9 @@ import {
   createVendorInline,
   checkDuplicateInvoice,
 } from "./actions";
+import { InvoiceFilePreview } from "@/components/invoice-file-preview";
+import { InvoicePaymentControls } from "@/app/(app)/invoices/invoice-payment-controls";
+import { InvoiceDeleteButton } from "@/app/(app)/invoices/invoice-delete-button";
 
 export type ReviewVendor = { id: string; name: string; gstin: string | null };
 export type ReviewCategory = { id: string; name: string; unit: string | null };
@@ -49,6 +52,7 @@ export type ReviewInvoice = {
   dueDate: string | null;
   vendorId: string;
   categoryId: string | null;
+  categoryName: string | null;
   projectId: string;
   subtotal: number;
   sgst: number;
@@ -57,6 +61,8 @@ export type ReviewInvoice = {
   total: number;
   fileUrl: string;
   status: string;
+  paidAt: string | null;
+  paidAmount: number;
   lineItems: ReviewLineItem[];
   vendor: ReviewVendor;
 };
@@ -243,10 +249,12 @@ export function ReviewForm({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">
-            Review extracted invoice
+            {invoice.status === "NEEDS_REVIEW" || invoice.status === "PROCESSING"
+              ? "Review extracted invoice"
+              : "Edit invoice"}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Verify fields from Azure Document Intelligence, then confirm to save.
+            Update invoice details, category, totals, and line items.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -294,6 +302,10 @@ export function ReviewForm({
               onValueChange={(value) => {
                 if (value) void onVendorSelect(value);
               }}
+              items={vendors.map((v) => ({
+                value: v.id,
+                label: v.gstin ? `${v.name} (${v.gstin})` : v.name,
+              }))}
             >
               <SelectTrigger id="vendorSelect" className="w-full">
                 <SelectValue placeholder="Select vendor…" />
@@ -345,6 +357,7 @@ export function ReviewForm({
               onValueChange={(value) => {
                 if (value) setProjectId(value);
               }}
+              items={projects.map((p) => ({ value: p.id, label: p.name }))}
             >
               <SelectTrigger id="projectId" className="w-full">
                 <SelectValue placeholder="Select project…" />
@@ -382,6 +395,7 @@ export function ReviewForm({
             <Select
               value={categoryId || null}
               onValueChange={(value) => setCategoryId(value ?? "")}
+              items={categories.map((c) => ({ value: c.id, label: c.name }))}
             >
               <SelectTrigger id="categoryId" className="w-full">
                 <SelectValue placeholder="Select category…" />
@@ -644,23 +658,63 @@ export function ReviewForm({
         </CardContent>
       </Card>
 
-      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => router.push("/invoices")}
-          disabled={pending}
-        >
-          Cancel
-        </Button>
-        <Button type="button" onClick={handleConfirm} disabled={pending}>
-          {pending ? "Saving…" : "Confirm & save invoice"}
-        </Button>
+      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <InvoiceDeleteButton
+          invoiceId={invoice.id}
+          invoiceNumber={invoiceNumber}
+          vendorName={vendorName}
+          variant="button"
+          redirectTo="/invoices"
+        />
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => router.push("/invoices")}
+            disabled={pending}
+          >
+            Cancel
+          </Button>
+          <Button type="button" onClick={handleConfirm} disabled={pending}>
+            {pending
+              ? "Saving…"
+              : invoice.status === "NEEDS_REVIEW" || invoice.status === "PROCESSING"
+                ? "Confirm & save invoice"
+                : "Save invoice changes"}
+          </Button>
+        </div>
       </div>
 
-      <p className="text-xs text-muted-foreground">
-        Source file: <code className="break-all">{invoice.fileUrl}</code>
-      </p>
+      <Card>
+        <CardHeader>
+          <CardTitle>Source file</CardTitle>
+          <CardDescription>
+            Uploaded invoice document — preview with zoom, or open in a new tab.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <InvoiceFilePreview
+            invoiceId={invoice.id}
+            fileUrl={invoice.fileUrl}
+          />
+          <InvoicePaymentControls
+            invoiceId={invoice.id}
+            status={invoice.status}
+            paidAt={invoice.paidAt}
+            invoiceNumber={invoiceNumber}
+            vendorName={
+              vendors.find((v) => v.id === vendorId)?.name ??
+              invoice.vendor.name
+            }
+            categoryName={
+              categories.find((c) => c.id === categoryId)?.name ??
+              invoice.categoryName
+            }
+            total={total}
+            paidAmount={invoice.paidAmount}
+          />
+        </CardContent>
+      </Card>
     </div>
   );
 }

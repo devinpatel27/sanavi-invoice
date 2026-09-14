@@ -72,28 +72,62 @@ export default async function VendorsPage() {
               No vendors yet. Add your first vendor above.
             </p>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>GSTIN</TableHead>
-                  <TableHead>Contact</TableHead>
-                  <TableHead className="text-right">Invoices</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+            <>
+              {/* Mobile View: Cards */}
+              <div className="space-y-3 md:hidden">
                 {vendors.map((vendor) => (
-                  <TableRow key={vendor.id}>
-                    <TableCell className="font-medium">{vendor.name}</TableCell>
-                    <TableCell>{vendor.gstin ?? "—"}</TableCell>
-                    <TableCell>{vendor.contact ?? "—"}</TableCell>
-                    <TableCell className="text-right">
-                      {vendor._count.invoices}
-                    </TableCell>
-                  </TableRow>
+                  <div
+                    key={vendor.id}
+                    className="rounded-xl border bg-card p-3.5 shadow-sm space-y-1.5"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="font-semibold text-sm text-foreground">
+                        {vendor.name}
+                      </p>
+                      <span className="text-xs text-muted-foreground shrink-0">
+                        {vendor._count.invoices} invoice(s)
+                      </span>
+                    </div>
+                    {vendor.gstin && (
+                      <p className="text-xs text-muted-foreground">
+                        GSTIN: <span className="font-mono text-foreground">{vendor.gstin}</span>
+                      </p>
+                    )}
+                    {vendor.contact && (
+                      <p className="text-xs text-muted-foreground">
+                        Contact: {vendor.contact}
+                      </p>
+                    )}
+                  </div>
                 ))}
-              </TableBody>
-            </Table>
+              </div>
+
+              {/* Desktop View: Table */}
+              <div className="hidden overflow-x-auto md:block">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>GSTIN</TableHead>
+                      <TableHead>Contact</TableHead>
+                      <TableHead className="text-right">Invoices</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {vendors.map((vendor) => (
+                      <TableRow key={vendor.id}>
+                        <TableCell className="font-medium">{vendor.name}</TableCell>
+                        <TableCell>{vendor.gstin ?? "—"}</TableCell>
+                        <TableCell>{vendor.contact ?? "—"}</TableCell>
+                        <TableCell className="text-right">
+                          {vendor._count.invoices}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
