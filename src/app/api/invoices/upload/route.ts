@@ -1,28 +1,31 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { isDocumentIntelligenceConfigured } from "@/lib/azure/document-intelligence";
 import { processInvoiceUpload } from "@/lib/invoices/process-upload";
+import { requireUser } from "@/lib/permissions";
+import { handleError, newRequestId, isAppError } from "@/lib/errors";
+import { logActivity } from "@/lib/activity";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
 export async function POST(request: Request) {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  if (!isDocumentIntelligenceConfigured()) {
-    return NextResponse.json(
-      {
-        error:
-          "Azure Document Intelligence is not configured. Set AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT and AZURE_DOCUMENT_INTELLIGENCE_KEY in .env.",
-      },
-      { status: 503 }
-    );
-  }
+  const requestId = newRequestId();
+  const endpoint = "/api/invoices/upload";
+  const method = "POST";
 
   try {
+    const user = await requireUser();
+
+    if (!isDocumentIntelligenceConfigured()) {
+      return NextResponse.json(
+        {
+          error:
+            "Azure Document Intelligence is not configured. Set AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT and AZURE_DOCUMENT_INTELLIGENCE_KEY in .env.",
+        },
+        { status: 503 }
+      );
+    }
+
     const formData = await request.formData();
     const file = formData.get("file");
     if (!(file instanceof File)) {
@@ -44,9 +47,17 @@ export async function POST(request: Request) {
 
     const result = await processInvoiceUpload({
       file,
-      userId: session.user.id,
-      role: session.user.role,
+      userId: user.id,
+      role: user.role,
       categoryId,
+    });
+
+    await logActivity({
+      userId: user.id,
+      action: "INVOICE_UPLOADED",
+      module: "INVOICE",
+      entityId: result.invoiceId,
+      details: { duplicateWarning: result.duplicateWarning },
     });
 
     return NextResponse.json({
@@ -56,13 +67,16 @@ export async function POST(request: Request) {
       originalInvoiceNumber: result.originalInvoiceNumber,
     });
   } catch (error) {
-    console.error("[POST /api/invoices/upload]", error);
+    const appError = await handleError({
+      error,
+      endpoint,
+      method,
+      requestId,
+    });
+    const status = isAppError(error) ? appError.status : 500;
     return NextResponse.json(
-      {
-        error:
-          error instanceof Error ? error.message : "Upload failed unexpectedly.",
-      },
-      { status: 500 }
+      { error: appError.message, code: appError.code, requestId },
+      { status }
     );
   }
 }

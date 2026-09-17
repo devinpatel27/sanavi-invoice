@@ -2,29 +2,16 @@ import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { auth } from "@/lib/auth";
+import type { Prisma } from "@/generated/prisma/client";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  DashboardCharts,
+  DashboardView,
   type CategorySpendPoint,
   type MonthSpendPoint,
   type StatusPoint,
   type VendorSpendPoint,
-} from "@/components/dashboard-charts";
-import type { Prisma } from "@/generated/prisma/client";
-
-function formatCurrency(value: number) {
-  return new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    maximumFractionDigits: 0,
-  }).format(value);
-}
+  type ProjectSpendPoint,
+  type RecentInvoice,
+} from "@/components/dashboard-view";
 
 function buildMonthBuckets(now: Date): MonthSpendPoint[] {
   const points: MonthSpendPoint[] = [];
@@ -35,12 +22,17 @@ function buildMonthBuckets(now: Date): MonthSpendPoint[] {
       month: key,
       label: d.toLocaleString("en-IN", { month: "short" }),
       total: 0,
+      paid: 0,
     });
   }
   return points;
 }
 
-type SearchParams = Promise<{ categoryId?: string }>;
+type SearchParams = Promise<{
+  categoryId?: string;
+  from?: string;
+  to?: string;
+}>;
 
 export default async function DashboardPage({
   searchParams,
@@ -53,12 +45,18 @@ export default async function DashboardPage({
     redirect("/invoices/upload");
   }
 
-  const { categoryId: selectedCategoryId = "" } = await searchParams;
+  const params = await searchParams;
+  const selectedCategoryId = params.categoryId ?? "";
 
   const now = new Date();
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  const startOfYear = new Date(now.getFullYear(), 0, 1);
   const trendStart = new Date(now.getFullYear(), now.getMonth() - 11, 1);
+
+  const from = params.from ? new Date(params.from) : undefined;
+  let to: Date | undefined;
+  if (params.to) {
+    to = new Date(params.to);
+    to.setHours(23, 59, 59, 999);
+  }
 
   const confirmed: Prisma.InvoiceWhereInput = {
     status: { notIn: ["PROCESSING", "NEEDS_REVIEW"] },
@@ -66,42 +64,41 @@ export default async function DashboardPage({
   const categoryFilter: Prisma.InvoiceWhereInput = selectedCategoryId
     ? { categoryId: selectedCategoryId }
     : {};
+  const dateFilter: Prisma.InvoiceWhereInput = {};
+  if (from || to) {
+    dateFilter.invoiceDate = {};
+    if (from) dateFilter.invoiceDate = { ...dateFilter.invoiceDate, gte: from };
+    if (to) dateFilter.invoiceDate = { ...dateFilter.invoiceDate, lte: to };
+  }
+  const paymentDateFilter: Prisma.PaymentWhereInput = {};
+  if (from || to) {
+    paymentDateFilter.paidOn = {};
+    if (from) paymentDateFilter.paidOn = { ...paymentDateFilter.paidOn, gte: from };
+    if (to) paymentDateFilter.paidOn = { ...paymentDateFilter.paidOn, lte: to };
+  }
 
   const [
-    monthTotal,
-    ytdTotal,
-    paymentTotal,
+    revenueAgg,
+    paidAgg,
     unpaidCount,
     overdueCount,
+    projectsCount,
+    vendorsCount,
     categoryBreakdown,
     trendInvoices,
     allCategories,
     reportInvoices,
+    recentInvoices,
+    projectBreakdown,
   ] = await Promise.all([
     db.invoice.aggregate({
-      where: {
-        invoiceDate: { gte: startOfMonth },
-        ...confirmed,
-        ...categoryFilter,
-      },
-      _sum: { total: true },
-    }),
-    db.invoice.aggregate({
-      where: {
-        invoiceDate: { gte: startOfYear },
-        ...confirmed,
-        ...categoryFilter,
-      },
+      where: { ...confirmed, ...categoryFilter, ...dateFilter },
       _sum: { total: true },
     }),
     db.payment.aggregate({
       where: {
-        invoice: {
-          is: {
-            ...confirmed,
-            ...categoryFilter,
-          },
-        },
+        ...paymentDateFilter,
+        invoice: { is: { ...confirmed, ...categoryFilter } },
       },
       _sum: { amount: true },
     }),
@@ -109,37 +106,61 @@ export default async function DashboardPage({
       where: {
         status: { in: ["UNPAID", "PARTIALLY_PAID"] },
         ...categoryFilter,
+        ...dateFilter,
       },
     }),
     db.invoice.count({
-      where: { status: "OVERDUE", ...categoryFilter },
+      where: { status: "OVERDUE", ...categoryFilter, ...dateFilter },
+    }),
+    db.project.count(),
+    db.vendor.count({
+      where: { invoices: { some: { ...confirmed, ...dateFilter } } },
     }),
     db.invoice.groupBy({
       by: ["categoryId"],
-      where: { ...confirmed },
+      where: { ...confirmed, ...dateFilter },
       _sum: { total: true },
       _count: true,
     }),
     db.invoice.findMany({
-      where: {
-        invoiceDate: { gte: trendStart },
-        ...confirmed,
-        ...categoryFilter,
-      },
-      select: { invoiceDate: true, total: true },
+      where: { invoiceDate: { gte: trendStart }, ...confirmed, ...categoryFilter },
+      select: { invoiceDate: true, total: true, payments: { select: { amount: true } } },
     }),
     db.category.findMany({
       orderBy: { name: "asc" },
       select: { id: true, name: true },
     }),
     db.invoice.findMany({
-      where: { ...confirmed, ...categoryFilter },
+      where: { ...confirmed, ...categoryFilter, ...dateFilter },
       select: {
+        id: true,
+        invoiceNumber: true,
         total: true,
         status: true,
+        invoiceDate: true,
         vendor: { select: { name: true } },
+        project: { select: { name: true } },
         payments: { select: { amount: true } },
       },
+    }),
+    db.invoice.findMany({
+      where: { ...confirmed, ...categoryFilter, ...dateFilter },
+      orderBy: { invoiceDate: "desc" },
+      take: 8,
+      select: {
+        id: true,
+        invoiceNumber: true,
+        total: true,
+        status: true,
+        invoiceDate: true,
+        vendor: { select: { name: true } },
+      },
+    }),
+    db.invoice.groupBy({
+      by: ["projectId"],
+      where: { ...confirmed, ...categoryFilter, ...dateFilter },
+      _sum: { total: true },
+      _count: true,
     }),
   ]);
 
@@ -149,9 +170,15 @@ export default async function DashboardPage({
   const categoriesForNames = await db.category.findMany({
     where: { id: { in: categoryIds } },
   });
-  const categoryNameById = new Map(
-    categoriesForNames.map((c) => [c.id, c.name])
-  );
+  const categoryNameById = new Map(categoriesForNames.map((c) => [c.id, c.name]));
+
+  const projectIds = projectBreakdown
+    .map((row) => row.projectId)
+    .filter((id): id is string => Boolean(id));
+  const projectsForNames = projectIds.length
+    ? await db.project.findMany({ where: { id: { in: projectIds } } })
+    : [];
+  const projectNameById = new Map(projectsForNames.map((p) => [p.id, p.name]));
 
   const monthlySpend = buildMonthBuckets(now);
   const monthIndex = new Map(monthlySpend.map((p, i) => [p.month, i]));
@@ -161,10 +188,12 @@ export default async function DashboardPage({
     const idx = monthIndex.get(key);
     if (idx != null) {
       monthlySpend[idx].total += Number(inv.total);
+      const paid = inv.payments.reduce((s, p) => s + Number(p.amount), 0);
+      monthlySpend[idx].paid += paid;
     }
   }
 
-  let categorySpend: CategorySpendPoint[] = categoryBreakdown
+  const categorySpend: CategorySpendPoint[] = categoryBreakdown
     .map((row) => ({
       id: row.categoryId,
       name: row.categoryId
@@ -175,67 +204,56 @@ export default async function DashboardPage({
     }))
     .sort((a, b) => b.total - a.total);
 
-  if (selectedCategoryId) {
-    categorySpend = categorySpend.filter((c) => c.id === selectedCategoryId);
-  }
+  const projectSpend: ProjectSpendPoint[] = projectBreakdown
+    .map((row) => ({
+      id: row.projectId,
+      name: row.projectId
+        ? projectNameById.get(row.projectId) ?? "Unknown"
+        : "Unassigned",
+      total: Number(row._sum.total ?? 0),
+      count: row._count,
+    }))
+    .sort((a, b) => b.total - a.total);
 
-  const outstandingTotal = reportInvoices.reduce((sum, invoice) => {
-    const paid = invoice.payments.reduce(
-      (value, payment) => value + Number(payment.amount),
-      0
-    );
-    return sum + Math.max(0, Number(invoice.total) - paid);
-  }, 0);
-
+  let outstandingTotal = 0;
   const statusMap = new Map<string, StatusPoint>();
   const vendorMap = new Map<string, VendorSpendPoint>();
   for (const invoice of reportInvoices) {
+    const total = Number(invoice.total);
+    const paid = invoice.payments.reduce((s, p) => s + Number(p.amount), 0);
+    outstandingTotal += Math.max(0, total - paid);
+
     const status = invoice.status.replaceAll("_", " ");
     const statusRow = statusMap.get(status) ?? { name: status, value: 0, count: 0 };
-    statusRow.value += Number(invoice.total);
+    statusRow.value += total;
     statusRow.count += 1;
     statusMap.set(status, statusRow);
 
-    const vendorRow = vendorMap.get(invoice.vendor.name) ?? {
-      name: invoice.vendor.name,
+    const vendorName = invoice.vendor.name;
+    const vendorRow = vendorMap.get(vendorName) ?? {
+      name: vendorName,
       total: 0,
       count: 0,
     };
-    vendorRow.total += Number(invoice.total);
+    vendorRow.total += total;
     vendorRow.count += 1;
-    vendorMap.set(invoice.vendor.name, vendorRow);
+    vendorMap.set(vendorName, vendorRow);
   }
   const statusBreakdown = [...statusMap.values()].sort((a, b) => b.value - a.value);
-  const vendorSpend = [...vendorMap.values()]
-    .sort((a, b) => b.total - a.total)
-    .slice(0, 8);
+  const vendorSpend = [...vendorMap.values()].sort((a, b) => b.total - a.total).slice(0, 8);
 
-  const cards = [
-    {
-      label: "Invoiced this month",
-      value: formatCurrency(Number(monthTotal._sum.total ?? 0)),
-    },
-    {
-      label: "Invoiced YTD",
-      value: formatCurrency(Number(ytdTotal._sum.total ?? 0)),
-    },
-    {
-      label: "Total paid",
-      value: formatCurrency(Number(paymentTotal._sum.amount ?? 0)),
-    },
-    {
-      label: "Outstanding",
-      value: formatCurrency(outstandingTotal),
-    },
-    {
-      label: "Unpaid invoices",
-      value: String(unpaidCount),
-    },
-    {
-      label: "Overdue invoices",
-      value: String(overdueCount),
-    },
-  ];
+  const recentInvoicesMapped: RecentInvoice[] = recentInvoices.map((inv) => ({
+    id: inv.id,
+    invoiceNumber: inv.invoiceNumber,
+    vendorName: inv.vendor.name,
+    total: Number(inv.total),
+    status: inv.status,
+    invoiceDate: inv.invoiceDate.toISOString(),
+  }));
+
+  const revenue = Number(revenueAgg._sum.total ?? 0);
+  const paid = Number(paidAgg._sum.amount ?? 0);
+  const pending = Math.max(0, outstandingTotal);
 
   return (
     <div className="flex flex-col gap-6">
@@ -243,72 +261,31 @@ export default async function DashboardPage({
         <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Overview of material purchase invoices and spend
-          {selectedCategoryId
-            ? ` · filtered by category`
-            : ""}.
+          {selectedCategoryId ? " · filtered by category" : ""}.
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-        {cards.map((card) => (
-          <Card
-            key={card.label}
-            className="transition-all duration-200 hover:-translate-y-0.5 hover:shadow-sm"
-          >
-            <CardHeader className="pb-2">
-              <CardDescription>{card.label}</CardDescription>
-              <CardTitle className="text-2xl tabular-nums">
-                {card.value}
-              </CardTitle>
-            </CardHeader>
-          </Card>
-        ))}
-      </div>
-
       <Suspense fallback={null}>
-        <DashboardCharts
+        <DashboardView
+          revenue={revenue}
+          paid={paid}
+          pending={pending}
+          unpaidCount={unpaidCount}
+          overdueCount={overdueCount}
+          projectsCount={projectsCount}
+          clientsCount={vendorsCount}
           monthlySpend={monthlySpend}
           categorySpend={categorySpend}
           statusBreakdown={statusBreakdown}
           vendorSpend={vendorSpend}
+          projectSpend={projectSpend}
+          recentInvoices={recentInvoicesMapped}
           categories={allCategories}
           selectedCategoryId={selectedCategoryId}
+          from={params.from ?? ""}
+          to={params.to ?? ""}
         />
       </Suspense>
-
-      <Card className="transition-shadow duration-200 hover:shadow-sm">
-        <CardHeader>
-          <CardTitle>Category list</CardTitle>
-          <CardDescription>Totals alongside the chart above</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {categorySpend.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">
-              No invoices yet. Upload and confirm your first invoice to see spend
-              by category.
-            </p>
-          ) : (
-            <div className="divide-y">
-              {categorySpend.map((row) => (
-                <div
-                  key={row.name}
-                  className="flex items-center justify-between gap-3 py-2.5 text-sm"
-                >
-                  <span className="min-w-0 truncate font-medium">
-                    {row.name}
-                  </span>
-                  <span className="shrink-0 text-muted-foreground">
-                    {row.count} invoice(s)
-                  </span>
-                  <span className="shrink-0 tabular-nums font-medium">
-                    {formatCurrency(row.total)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
     </div>
   );
 }

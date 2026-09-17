@@ -16,7 +16,6 @@ import {
 import {
   Calendar,
   ChevronDown,
-  Filter,
   RotateCcw,
   Search,
   SlidersHorizontal,

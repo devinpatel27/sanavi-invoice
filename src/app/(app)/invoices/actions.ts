@@ -2,8 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { AppError } from "@/lib/errors";
+import { requirePermission } from "@/lib/permissions";
+import { logActivity } from "@/lib/activity";
 import {
   assertInvoiceAccess,
   isPayableStatus,
@@ -15,6 +17,7 @@ const paymentSchema = z.object({
   paidOn: z.string().min(1),
   mode: z.string().trim().max(50).optional(),
   reference: z.string().trim().max(100).optional(),
+  notes: z.string().trim().max(500).optional(),
 });
 
 export async function recordInvoicePayment(input: {
@@ -23,24 +26,31 @@ export async function recordInvoicePayment(input: {
   paidOn: string;
   mode?: string;
   reference?: string;
+  notes?: string;
 }) {
-  const session = await auth();
-  if (!session?.user) throw new Error("Unauthorized");
+  const user = await requirePermission("payment:create");
 
-  const parsed = paymentSchema.parse(input);
-  const invoice = await assertInvoiceAccess(parsed.invoiceId, {
-    id: session.user.id,
-    role: session.user.role,
-  });
+  const parsed = paymentSchema.safeParse(input);
+  if (!parsed.success) {
+    throw new AppError(
+      "VALIDATION_001",
+      "Payment details are invalid."
+    );
+  }
+
+  const invoice = await assertInvoiceAccess(parsed.data.invoiceId, user);
 
   if (!isPayableStatus(invoice.status)) {
-    throw new Error(
+    throw new AppError(
+      "PAYMENT_001",
       "Only confirmed invoices can be marked paid or unpaid. Finish review first."
     );
   }
 
-  const paidOn = new Date(parsed.paidOn);
-  if (Number.isNaN(paidOn.getTime())) throw new Error("Invalid payment date");
+  const paidOn = new Date(parsed.data.paidOn);
+  if (Number.isNaN(paidOn.getTime())) {
+    throw new AppError("VALIDATION_001", "Invalid payment date");
+  }
 
   const aggregate = await db.payment.aggregate({
     where: { invoiceId: invoice.id },
@@ -49,21 +59,26 @@ export async function recordInvoicePayment(input: {
   const alreadyPaid = Number(aggregate._sum.amount ?? 0);
   const invoiceTotal = Number(invoice.total);
   const remaining = Math.max(0, invoiceTotal - alreadyPaid);
-  if (parsed.amount > remaining + 0.01) {
-    throw new Error(`Payment cannot exceed the remaining balance of ₹${remaining.toFixed(2)}`);
+  if (parsed.data.amount > remaining + 0.01) {
+    throw new AppError(
+      "PAYMENT_001",
+      `Payment cannot exceed the remaining balance of ₹${remaining.toFixed(2)}`
+    );
   }
 
-  const newPaidTotal = alreadyPaid + parsed.amount;
+  const newPaidTotal = alreadyPaid + parsed.data.amount;
   const fullyPaid = newPaidTotal >= invoiceTotal - 0.01;
 
   const payment = await db.$transaction(async (tx) => {
     const created = await tx.payment.create({
       data: {
         invoiceId: invoice.id,
-        amount: parsed.amount,
+        amount: parsed.data.amount,
         paidOn,
-        mode: parsed.mode || null,
-        reference: parsed.reference || null,
+        mode: parsed.data.mode || null,
+        reference: parsed.data.reference || null,
+        notes: parsed.data.notes || null,
+        paidById: user.id,
       },
     });
     await tx.invoice.update({
@@ -76,10 +91,24 @@ export async function recordInvoicePayment(input: {
     return created;
   });
 
+  await logActivity({
+    userId: user.id,
+    action: "PAYMENT_CREATED",
+    module: "PAYMENT",
+    entityId: invoice.id,
+    details: {
+      paymentId: payment.id,
+      amount: parsed.data.amount,
+      fullyPaid,
+    },
+  });
+
   revalidatePath("/invoices");
   revalidatePath("/payments");
   revalidatePath("/dashboard");
+  revalidatePath("/projects");
   revalidatePath(`/invoices/${invoice.id}/review`);
+  revalidatePath(`/projects/${invoice.projectId}`);
 
   return {
     paymentId: payment.id,
@@ -93,20 +122,13 @@ export async function deleteInvoicePayment(input: {
   invoiceId: string;
   paymentId: string;
 }) {
-  const session = await auth();
-  if (!session?.user) throw new Error("Unauthorized");
-  if (session.user.role !== "ADMIN") {
-    throw new Error("Only administrators can delete payments");
-  }
+  const user = await requirePermission("payment:delete");
 
-  const invoice = await assertInvoiceAccess(input.invoiceId, {
-    id: session.user.id,
-    role: session.user.role,
-  });
+  const invoice = await assertInvoiceAccess(input.invoiceId, user);
   const payment = await db.payment.findFirst({
     where: { id: input.paymentId, invoiceId: invoice.id },
   });
-  if (!payment) throw new Error("Payment not found");
+  if (!payment) throw new AppError("NOT_FOUND_001", "Payment not found");
 
   await db.$transaction(async (tx) => {
     await tx.payment.delete({ where: { id: payment.id } });
@@ -130,29 +152,47 @@ export async function deleteInvoicePayment(input: {
     });
   });
 
+  await logActivity({
+    userId: user.id,
+    action: "PAYMENT_DELETED",
+    module: "PAYMENT",
+    entityId: invoice.id,
+    details: { paymentId: payment.id, amount: Number(payment.amount) },
+  });
+
   revalidatePath("/invoices");
   revalidatePath("/payments");
   revalidatePath("/dashboard");
+  revalidatePath("/projects");
   revalidatePath(`/invoices/${invoice.id}/review`);
+  revalidatePath(`/projects/${invoice.projectId}`);
 }
 
 export async function deleteInvoice(invoiceId: string) {
-  const session = await auth();
-  if (!session?.user) throw new Error("Unauthorized");
+  const user = await requirePermission("invoice:delete");
 
   const invoice = await db.invoice.findUnique({
     where: { id: invoiceId },
-    select: { id: true, invoiceNumber: true, status: true, uploadedById: true },
+    select: {
+      id: true,
+      invoiceNumber: true,
+      status: true,
+      uploadedById: true,
+      projectId: true,
+    },
   });
 
-  if (!invoice) throw new Error("Invoice not found");
+  if (!invoice) throw new AppError("NOT_FOUND_001", "Invoice not found");
 
-  if (session.user.role !== "ADMIN") {
+  if (user.role !== "ADMIN") {
     if (
-      invoice.uploadedById !== session.user.id ||
+      invoice.uploadedById !== user.id ||
       (invoice.status !== "NEEDS_REVIEW" && invoice.status !== "PROCESSING")
     ) {
-      throw new Error("You do not have permission to delete this invoice");
+      throw new AppError(
+        "PERMISSION_001",
+        "You do not have permission to delete this invoice"
+      );
     }
   }
 
@@ -160,8 +200,18 @@ export async function deleteInvoice(invoiceId: string) {
     where: { id: invoiceId },
   });
 
+  await logActivity({
+    userId: user.id,
+    action: "INVOICE_DELETED",
+    module: "INVOICE",
+    entityId: invoice.id,
+    details: { invoiceNumber: invoice.invoiceNumber },
+  });
+
   revalidatePath("/invoices");
   revalidatePath("/payments");
   revalidatePath("/dashboard");
   revalidatePath("/materials");
+  revalidatePath("/projects");
+  revalidatePath(`/projects/${invoice.projectId}`);
 }

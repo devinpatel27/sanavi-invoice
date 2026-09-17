@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 
 import { db } from "@/lib/db";
+import { logActivity } from "@/lib/activity";
 
 const credentialsSchema = z.object({
   email: z.string().email(),
@@ -35,6 +36,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         const passwordMatches = await bcrypt.compare(password, user.passwordHash);
         if (!passwordMatches) return null;
+
+        await logActivity({
+          userId: user.id,
+          action: "LOGIN",
+          module: "AUTH",
+          entityId: user.id,
+          details: { email: user.email },
+        });
 
         return {
           id: user.id,

@@ -2,8 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { requirePermission } from "@/lib/permissions";
+import { logActivity } from "@/lib/activity";
 
 const categorySchema = z.object({
   name: z.string().min(1),
@@ -11,18 +12,22 @@ const categorySchema = z.object({
 });
 
 export async function createCategory(formData: FormData) {
-  const session = await auth();
-  // Full categories management page remains ADMIN-only (enforced by proxy).
-  // Inline create during invoice review uses createCategoryInline (STAFF allowed).
-  if (session?.user.role !== "ADMIN") {
-    throw new Error("Only admins can manage categories from this page");
-  }
+  const user = await requirePermission("category:manage");
 
   const parsed = categorySchema.parse({
     name: formData.get("name"),
     unit: formData.get("unit") || undefined,
   });
 
-  await db.category.create({ data: parsed });
+  const created = await db.category.create({ data: parsed });
+
+  await logActivity({
+    userId: user.id,
+    action: "CATEGORY_CREATED",
+    module: "CATEGORY",
+    entityId: created.id,
+    details: { name: created.name },
+  });
+
   revalidatePath("/categories");
 }

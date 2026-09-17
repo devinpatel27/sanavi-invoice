@@ -14,6 +14,9 @@ import {
   Building2,
   Tags,
   Users,
+  FolderKanban,
+  ScrollText,
+  Bug,
   LogOut,
   ChevronRight,
 } from "lucide-react";
@@ -55,9 +58,17 @@ export function MobileBottomBar({ role, name, email }: MobileBottomBarProps) {
     "/vendors",
     "/categories",
     "/users",
+    "/projects",
+    "/admin",
   ].some((prefix) => pathname.startsWith(prefix));
 
   const adminMoreItems = [
+    {
+      href: "/projects",
+      label: "Projects",
+      description: "Sites, teams & spend per project",
+      icon: FolderKanban,
+    },
     {
       href: "/materials",
       label: "Rate Sheet",
@@ -81,6 +92,18 @@ export function MobileBottomBar({ role, name, email }: MobileBottomBarProps) {
       label: "Users",
       description: "User roles & site access",
       icon: Users,
+    },
+    {
+      href: "/admin/activity",
+      label: "Activity Logs",
+      description: "Audit trail of actions",
+      icon: ScrollText,
+    },
+    {
+      href: "/admin/errors",
+      label: "Error Logs",
+      description: "API errors & request ids",
+      icon: Bug,
     },
   ];
 

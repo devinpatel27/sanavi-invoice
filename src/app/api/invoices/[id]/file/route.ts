@@ -1,9 +1,10 @@
 import { readFile } from "fs/promises";
 import path from "path";
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { invoiceAccessWhere } from "@/lib/invoices/access";
+import { requireUser } from "@/lib/permissions";
+import { handleError, newRequestId, isAppError } from "@/lib/errors";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -42,72 +43,85 @@ function detectContentType(filename: string, buffer?: Buffer) {
 }
 
 export async function GET(_req: Request, context: RouteContext) {
+  const requestId = newRequestId();
   const { id } = await context.params;
-  const session = await auth();
-  if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
 
-  const invoice = await db.invoice.findFirst({
-    where: {
-      id,
-      ...invoiceAccessWhere({
-        id: session.user.id,
-        role: session.user.role,
-      }),
-    },
-    select: { id: true, fileUrl: true, invoiceNumber: true },
-  });
+  try {
+    const user = await requireUser();
 
-  if (!invoice) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
+    const invoice = await db.invoice.findFirst({
+      where: {
+        id,
+        ...invoiceAccessWhere({
+          id: user.id,
+          role: user.role,
+        }),
+      },
+      select: { id: true, fileUrl: true, invoiceNumber: true },
+    });
 
-  const fileUrl = invoice.fileUrl;
-
-  if (fileUrl.startsWith("local://")) {
-    const relative = fileUrl.replace(/^local:\/\//, "");
-    const absolute = path.resolve(process.cwd(), relative);
-    const uploadsRoot = path.resolve(process.cwd(), ".data", "uploads");
-    if (!absolute.startsWith(uploadsRoot)) {
-      return NextResponse.json({ error: "Invalid file path" }, { status: 400 });
+    if (!invoice) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
-    try {
-      const buffer = await readFile(absolute);
-      const filename = path.basename(absolute);
-      const contentType = detectContentType(filename, buffer);
-      return new NextResponse(buffer, {
-        headers: {
-          "Content-Type": contentType,
-          "Content-Disposition": `inline; filename="${filename}"`,
-          "Cache-Control": "private, max-age=60",
-        },
-      });
-    } catch {
-      return NextResponse.json({ error: "File missing on disk" }, { status: 404 });
-    }
-  }
 
-  if (fileUrl.startsWith("http://") || fileUrl.startsWith("https://")) {
-    try {
-      const upstream = await fetch(fileUrl);
-      if (!upstream.ok || !upstream.body) {
+    const fileUrl = invoice.fileUrl;
+
+    if (fileUrl.startsWith("local://")) {
+      const relative = fileUrl.replace(/^local:\/\//, "");
+      const absolute = path.resolve(process.cwd(), relative);
+      const uploadsRoot = path.resolve(process.cwd(), ".data", "uploads");
+      if (!absolute.startsWith(uploadsRoot)) {
+        return NextResponse.json({ error: "Invalid file path" }, { status: 400 });
+      }
+      try {
+        const buffer = await readFile(absolute);
+        const filename = path.basename(absolute);
+        const contentType = detectContentType(filename, buffer);
+        return new NextResponse(buffer, {
+          headers: {
+            "Content-Type": contentType,
+            "Content-Disposition": `inline; filename="${filename}"`,
+            "Cache-Control": "private, max-age=60",
+          },
+        });
+      } catch {
+        return NextResponse.json({ error: "File missing on disk" }, { status: 404 });
+      }
+    }
+
+    if (fileUrl.startsWith("http://") || fileUrl.startsWith("https://")) {
+      try {
+        const upstream = await fetch(fileUrl);
+        if (!upstream.ok || !upstream.body) {
+          return NextResponse.redirect(fileUrl);
+        }
+        const contentType =
+          upstream.headers.get("content-type") ??
+          contentTypeFromName(fileUrl);
+        return new NextResponse(upstream.body, {
+          headers: {
+            "Content-Type": contentType,
+            "Content-Disposition": `inline; filename="invoice-${invoice.invoiceNumber}"`,
+            "Cache-Control": "private, max-age=60",
+          },
+        });
+      } catch {
         return NextResponse.redirect(fileUrl);
       }
-      const contentType =
-        upstream.headers.get("content-type") ??
-        contentTypeFromName(fileUrl);
-      return new NextResponse(upstream.body, {
-        headers: {
-          "Content-Type": contentType,
-          "Content-Disposition": `inline; filename="invoice-${invoice.invoiceNumber}"`,
-          "Cache-Control": "private, max-age=60",
-        },
-      });
-    } catch {
-      return NextResponse.redirect(fileUrl);
     }
-  }
 
-  return NextResponse.json({ error: "Unsupported file URL" }, { status: 400 });
+    return NextResponse.json({ error: "Unsupported file URL" }, { status: 400 });
+  } catch (error) {
+    const appError = await handleError({
+      error,
+      endpoint: `/api/invoices/${id}/file`,
+      method: "GET",
+      requestId,
+    });
+    const status = isAppError(error) ? appError.status : 500;
+    return NextResponse.json(
+      { error: appError.message, code: appError.code, requestId },
+      { status }
+    );
+  }
 }

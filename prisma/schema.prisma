@@ -33,21 +33,33 @@ model User {
   uploadedInvoices   Invoice[]           @relation("UploadedBy")
   reviewedInvoices   Invoice[]           @relation("ReviewedBy")
   auditLogs          AuditLog[]
+  payments           Payment[]           @relation("PaidBy")
+  projectNotes       ProjectNote[]
+  activityLogs       ActivityLog[]
 }
 
 // ---------------------------------------------------------------------------
 // Core taxonomy: Project -> Category -> Material, Vendor
 // ---------------------------------------------------------------------------
 
+enum ProjectStatus {
+  ACTIVE
+  COMPLETED
+  ARCHIVED
+}
+
 model Project {
-  id        String   @id @default(cuid())
-  name      String
-  address   String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String        @id @default(cuid())
+  name        String
+  description String?
+  address     String?
+  status      ProjectStatus @default(ACTIVE)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
 
   invoices    Invoice[]
   assignments ProjectAssignment[]
+  notes       ProjectNote[]
 }
 
 model ProjectAssignment {
@@ -60,6 +72,20 @@ model ProjectAssignment {
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@unique([userId, projectId])
+}
+
+model ProjectNote {
+  id        String   @id @default(cuid())
+  projectId String
+  userId    String
+  content   String
+  createdAt DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([userId])
 }
 
 model Category {
@@ -152,7 +178,10 @@ model Invoice {
 
   @@unique([vendorId, invoiceNumber])
   @@index([projectId])
+  @@index([vendorId])
+  @@index([categoryId])
   @@index([status])
+  @@index([invoiceDate])
 }
 
 model InvoiceLineItem {
@@ -186,9 +215,16 @@ model Payment {
   paidOn    DateTime
   mode      String? // NEFT, cheque, UPI...
   reference String?
+  notes     String?
+  paidById  String?
   createdAt DateTime @default(now())
 
   invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  paidBy  User?   @relation("PaidBy", fields: [paidById], references: [id], onDelete: SetNull)
+
+  @@index([invoiceId])
+  @@index([paidOn])
+  @@index([paidById])
 }
 
 // ---------------------------------------------------------------------------
@@ -208,4 +244,46 @@ model AuditLog {
   user    User?   @relation(fields: [userId], references: [id])
 
   @@index([invoiceId])
+}
+
+// ---------------------------------------------------------------------------
+// Activity log — system-wide audit of important admin/user actions.
+// ---------------------------------------------------------------------------
+
+model ActivityLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  action    String // e.g. USER_CREATED, INVOICE_PAID, PROJECT_UPDATED
+  module    String // e.g. AUTH, USER, PROJECT, INVOICE, PAYMENT
+  entityId  String?
+  details   Json?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([module, createdAt])
+  @@index([userId])
+  @@index([createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// API error log — centralized backend error tracking (admin only).
+// ---------------------------------------------------------------------------
+
+model ApiErrorLog {
+  id         String   @id @default(cuid())
+  statusCode Int
+  errorCode  String
+  endpoint   String
+  method     String
+  userId     String?
+  message    String
+  requestId  String
+  stack      String?
+  createdAt  DateTime @default(now())
+
+  @@index([errorCode])
+  @@index([createdAt])
 }

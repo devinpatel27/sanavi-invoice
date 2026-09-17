@@ -3,16 +3,10 @@
 import { revalidatePath } from "next/cache";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-
-async function requireAdmin() {
-  const session = await auth();
-  if (!session?.user || session.user.role !== "ADMIN") {
-    throw new Error("Only admins can manage users");
-  }
-  return session;
-}
+import { AppError } from "@/lib/errors";
+import { requireAdmin } from "@/lib/permissions";
+import { logActivity } from "@/lib/activity";
 
 const createSchema = z.object({
   name: z.string().trim().min(1, "Name is required"),
@@ -41,18 +35,18 @@ export async function createUser(input: {
   role: "ADMIN" | "STAFF";
   projectIds: string[];
 }) {
-  await requireAdmin();
+  const admin = await requireAdmin();
   const parsed = createSchema.parse(input);
 
   const existing = await db.user.findUnique({
     where: { email: parsed.email.toLowerCase() },
   });
-  if (existing) throw new Error("A user with this email already exists");
+  if (existing) throw new AppError("VALIDATION_001", "A user with this email already exists");
 
   const passwordHash = await bcrypt.hash(parsed.password, 10);
   const projectIds = parsed.role === "STAFF" ? parsed.projectIds : [];
 
-  await db.user.create({
+  const created = await db.user.create({
     data: {
       name: parsed.name,
       email: parsed.email.toLowerCase(),
@@ -67,6 +61,14 @@ export async function createUser(input: {
     },
   });
 
+  await logActivity({
+    userId: admin.id,
+    action: "USER_CREATED",
+    module: "USER",
+    entityId: created.id,
+    details: { email: created.email, role: created.role },
+  });
+
   revalidatePath("/users");
 }
 
@@ -78,11 +80,11 @@ export async function updateUser(input: {
   role: "ADMIN" | "STAFF";
   projectIds: string[];
 }) {
-  await requireAdmin();
+  const admin = await requireAdmin();
   const parsed = updateSchema.parse(input);
 
   const user = await db.user.findUnique({ where: { id: parsed.id } });
-  if (!user) throw new Error("User not found");
+  if (!user) throw new AppError("NOT_FOUND_001", "User not found");
 
   const emailTaken = await db.user.findFirst({
     where: {
@@ -90,7 +92,7 @@ export async function updateUser(input: {
       id: { not: parsed.id },
     },
   });
-  if (emailTaken) throw new Error("A user with this email already exists");
+  if (emailTaken) throw new AppError("VALIDATION_001", "A user with this email already exists");
 
   const passwordHash = parsed.password
     ? await bcrypt.hash(parsed.password, 10)
@@ -118,13 +120,21 @@ export async function updateUser(input: {
     }
   });
 
+  await logActivity({
+    userId: admin.id,
+    action: "USER_UPDATED",
+    module: "USER",
+    entityId: parsed.id,
+    details: { email: parsed.email.toLowerCase(), role: parsed.role },
+  });
+
   revalidatePath("/users");
 }
 
 export async function deleteUser(userId: string) {
-  const session = await requireAdmin();
-  if (session.user.id === userId) {
-    throw new Error("You cannot delete your own account");
+  const admin = await requireAdmin();
+  if (admin.id === userId) {
+    throw new AppError("VALIDATION_001", "You cannot delete your own account");
   }
 
   const user = await db.user.findUnique({
@@ -135,17 +145,27 @@ export async function deleteUser(userId: string) {
       },
     },
   });
-  if (!user) throw new Error("User not found");
+  if (!user) throw new AppError("NOT_FOUND_001", "User not found");
 
   if (
     user._count.uploadedInvoices > 0 ||
     user._count.reviewedInvoices > 0
   ) {
-    throw new Error(
+    throw new AppError(
+      "VALIDATION_001",
       "Cannot delete a user who has uploaded or reviewed invoices. Reassign their work first."
     );
   }
 
   await db.user.delete({ where: { id: userId } });
+
+  await logActivity({
+    userId: admin.id,
+    action: "USER_DELETED",
+    module: "USER",
+    entityId: userId,
+    details: { email: user.email },
+  });
+
   revalidatePath("/users");
 }

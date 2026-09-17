@@ -55,6 +55,7 @@ export function InvoicePaymentControls({
   const [paidOn, setPaidOn] = useState(today());
   const [mode, setMode] = useState("BANK_TRANSFER");
   const [reference, setReference] = useState("");
+  const [notes, setNotes] = useState("");
   const canPay = balance > 0.009 &&
     ["UNPAID", "PARTIALLY_PAID", "OVERDUE"].includes(status);
 
@@ -62,7 +63,7 @@ export function InvoicePaymentControls({
     startTransition(async () => {
       try {
         await recordInvoicePayment({
-          invoiceId, amount: Number(amount), paidOn, mode, reference,
+          invoiceId, amount: Number(amount), paidOn, mode, reference, notes,
         });
         toast.success("Payment recorded");
         setOpen(false);
@@ -102,6 +103,7 @@ export function InvoicePaymentControls({
                 <div className="grid gap-2"><Label htmlFor={`date-${invoiceId}`}>Payment date</Label><Input id={`date-${invoiceId}`} type="date" value={paidOn} onChange={(e) => setPaidOn(e.target.value)} /></div>
                 <div className="grid gap-2"><Label htmlFor={`mode-${invoiceId}`}>Mode</Label><Input id={`mode-${invoiceId}`} placeholder="NEFT, UPI, cheque…" value={mode} onChange={(e) => setMode(e.target.value)} /></div>
                 <div className="grid gap-2"><Label htmlFor={`ref-${invoiceId}`}>Reference</Label><Input id={`ref-${invoiceId}`} placeholder="UTR / cheque number" value={reference} onChange={(e) => setReference(e.target.value)} /></div>
+                <div className="grid gap-2 sm:col-span-2"><Label htmlFor={`notes-${invoiceId}`}>Notes</Label><Input id={`notes-${invoiceId}`} placeholder="Optional payment notes" value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
               </div>
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>

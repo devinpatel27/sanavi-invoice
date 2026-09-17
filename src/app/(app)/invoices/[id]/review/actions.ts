@@ -4,8 +4,10 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { Prisma } from "@/generated/prisma/client";
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { AppError } from "@/lib/errors";
+import { requirePermission, requireUser } from "@/lib/permissions";
+import { logActivity } from "@/lib/activity";
 
 const lineItemSchema = z.object({
   id: z.string().optional(),
@@ -43,8 +45,7 @@ function d(n: number) {
 }
 
 async function assertCanReview(invoiceId: string) {
-  const session = await auth();
-  if (!session?.user?.id) throw new Error("Unauthorized");
+  const session = await requirePermission("invoice:review");
 
   const invoice = await db.invoice.findUnique({
     where: { id: invoiceId },
@@ -53,15 +54,18 @@ async function assertCanReview(invoiceId: string) {
       payments: { orderBy: { paidOn: "desc" } },
     },
   });
-  if (!invoice) throw new Error("Invoice not found");
+  if (!invoice) throw new AppError("NOT_FOUND_001", "Invoice not found");
 
-  if (session.user.role === "STAFF") {
-    const isUploader = invoice.uploadedById === session.user.id;
+  if (session.role === "STAFF") {
+    const isUploader = invoice.uploadedById === session.id;
     const assignment = await db.projectAssignment.findFirst({
-      where: { userId: session.user.id, projectId: invoice.projectId },
+      where: { userId: session.id, projectId: invoice.projectId },
     });
     if (!isUploader && !assignment) {
-      throw new Error("You do not have access to this invoice");
+      throw new AppError(
+        "PERMISSION_001",
+        "You do not have access to this invoice"
+      );
     }
   }
 
@@ -72,11 +76,10 @@ export async function createCategoryInline(input: {
   name: string;
   unit?: string;
 }) {
-  const session = await auth();
-  if (!session?.user) throw new Error("Unauthorized");
+  const session = await requireUser();
 
   const name = input.name.trim();
-  if (!name) throw new Error("Category name is required");
+  if (!name) throw new AppError("VALIDATION_001", "Category name is required");
 
   const existing = await db.category.findUnique({ where: { name } });
   if (existing) return existing;
@@ -84,6 +87,15 @@ export async function createCategoryInline(input: {
   const created = await db.category.create({
     data: { name, unit: input.unit?.trim() || null },
   });
+
+  await logActivity({
+    userId: session.id,
+    action: "CATEGORY_CREATED",
+    module: "CATEGORY",
+    entityId: created.id,
+    details: { name: created.name },
+  });
+
   revalidatePath("/categories");
   revalidatePath("/invoices");
   return created;
@@ -93,11 +105,10 @@ export async function createVendorInline(input: {
   name: string;
   gstin?: string | null;
 }) {
-  const session = await auth();
-  if (!session?.user) throw new Error("Unauthorized");
+  const session = await requireUser();
 
   const name = input.name.trim();
-  if (!name) throw new Error("Vendor name is required");
+  if (!name) throw new AppError("VALIDATION_001", "Vendor name is required");
   const gstin = input.gstin?.trim() || null;
 
   if (gstin) {
@@ -110,7 +121,17 @@ export async function createVendorInline(input: {
   });
   if (byName) return byName;
 
-  return db.vendor.create({ data: { name, gstin } });
+  const created = await db.vendor.create({ data: { name, gstin } });
+
+  await logActivity({
+    userId: session.id,
+    action: "VENDOR_CREATED",
+    module: "VENDOR",
+    entityId: created.id,
+    details: { name: created.name },
+  });
+
+  return created;
 }
 
 export async function checkDuplicateInvoice(
@@ -248,15 +269,29 @@ export async function confirmInvoiceReview(raw: ConfirmInvoiceInput) {
           nextStatus === "PAID"
             ? invoice.paidAt ?? invoice.payments[0]?.paidOn ?? new Date()
             : null,
-        reviewedById: session.user.id,
+        reviewedById: session.id,
         reviewedAt: new Date(),
       },
     });
   });
 
+  await logActivity({
+    userId: session.id,
+    action: wasDraft ? "INVOICE_CREATED" : "INVOICE_UPDATED",
+    module: "INVOICE",
+    entityId: invoice.id,
+    details: {
+      invoiceNumber: parsed.invoiceNumber.trim(),
+      total: parsed.total,
+      status: wasDraft ? "UNPAID" : undefined,
+    },
+  });
+
   revalidatePath("/invoices");
   revalidatePath("/dashboard");
+  revalidatePath("/projects");
   revalidatePath(`/invoices/${invoice.id}/review`);
+  revalidatePath(`/projects/${parsed.projectId}`);
   redirect(
     wasDraft
       ? `/invoices?confirmed=${invoice.id}`

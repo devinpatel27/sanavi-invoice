@@ -7,6 +7,9 @@ import {
   Tags,
   Wallet,
   Users,
+  FolderKanban,
+  ScrollText,
+  Bug,
   type LucideIcon,
 } from "lucide-react";
 
@@ -21,7 +24,7 @@ export type NavItem = {
 };
 
 /**
- * STAFF: upload + their invoices (pending review / uploads).
+ * STAFF: upload + their invoices (pending review / uploads) + assigned projects.
  * ADMIN: full navigation.
  */
 export const NAV_ITEMS: NavItem[] = [
@@ -29,11 +32,14 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/invoices/upload", label: "Upload Invoice", icon: Upload },
   { href: "/invoices", label: "My Invoices", icon: FileText, staffOnly: true },
   { href: "/invoices", label: "Invoices", icon: FileText, adminOnly: true },
+  { href: "/projects", label: "Projects", icon: FolderKanban },
   { href: "/payments", label: "Payments", icon: Wallet, adminOnly: true },
   { href: "/materials", label: "Rate Sheet", icon: Boxes, adminOnly: true },
   { href: "/vendors", label: "Vendors", icon: Building2, adminOnly: true },
   { href: "/categories", label: "Categories", icon: Tags, adminOnly: true },
   { href: "/users", label: "Users", icon: Users, adminOnly: true },
+  { href: "/admin/activity", label: "Activity Logs", icon: ScrollText, adminOnly: true },
+  { href: "/admin/errors", label: "Error Logs", icon: Bug, adminOnly: true },
 ];
 
 export function getNavItemsForRole(role: "ADMIN" | "STAFF") {
@@ -48,6 +54,7 @@ export function getNavItemsForRole(role: "ADMIN" | "STAFF") {
 export const STAFF_ALLOWED_PREFIXES = [
   "/invoices",
   "/api/invoices",
+  "/projects",
 ];
 
 export const ADMIN_ONLY_PREFIXES = [
@@ -57,4 +64,5 @@ export const ADMIN_ONLY_PREFIXES = [
   "/categories",
   "/materials",
   "/users",
+  "/admin",
 ];

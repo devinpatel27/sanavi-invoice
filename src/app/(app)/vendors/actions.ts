@@ -2,8 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { AppError } from "@/lib/errors";
+import { requirePermission } from "@/lib/permissions";
+import { logActivity } from "@/lib/activity";
 
 const vendorSchema = z.object({
   name: z.string().min(1),
@@ -13,10 +15,7 @@ const vendorSchema = z.object({
 });
 
 export async function createVendor(formData: FormData) {
-  const session = await auth();
-  if (session?.user.role !== "ADMIN") {
-    throw new Error("Only admins can manage vendors");
-  }
+  const user = await requirePermission("vendor:manage");
 
   const parsed = vendorSchema.parse({
     name: formData.get("name"),
@@ -25,6 +24,42 @@ export async function createVendor(formData: FormData) {
     contact: formData.get("contact") || undefined,
   });
 
-  await db.vendor.create({ data: parsed });
+  const created = await db.vendor.create({ data: parsed });
+
+  await logActivity({
+    userId: user.id,
+    action: "VENDOR_CREATED",
+    module: "VENDOR",
+    entityId: created.id,
+    details: { name: created.name },
+  });
+
+  revalidatePath("/vendors");
+}
+
+export async function deleteVendor(vendorId: string) {
+  const user = await requirePermission("vendor:manage");
+
+  const count = await db.invoice.count({ where: { vendorId } });
+  if (count > 0) {
+    throw new AppError(
+      "VALIDATION_001",
+      "Cannot delete a vendor that has invoices."
+    );
+  }
+
+  const vendor = await db.vendor.findUnique({ where: { id: vendorId } });
+  if (!vendor) throw new AppError("NOT_FOUND_001", "Vendor not found");
+
+  await db.vendor.delete({ where: { id: vendorId } });
+
+  await logActivity({
+    userId: user.id,
+    action: "VENDOR_CREATED",
+    module: "VENDOR",
+    entityId: vendorId,
+    details: { name: vendor.name, deleted: true },
+  });
+
   revalidatePath("/vendors");
 }
