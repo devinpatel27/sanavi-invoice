@@ -1,0 +1,17 @@
+{
+  "node": {
+    "4054ffa2802c73e93b35c30e0eba377fa4fafb3912": {
+      "workers": {
+        "app/(app)/invoices/upload/page": {
+          "moduleId": 277030,
+          "async": true,
+          "exportedName": "createCategoryInline",
+          "filename": "src/app/(app)/invoices/[id]/review/actions.ts"
+        }
+      },
+      "exportedName": "createCategoryInline",
+      "filename": "src/app/(app)/invoices/[id]/review/actions.ts"
+    }
+  },
+  "edge": {}
+}

@@ -1,0 +1,17 @@
+{
+  "node": {
+    "4045bfa698469cc39d59dddab7eb0d5e4efa71df56": {
+      "workers": {
+        "app/(app)/admin/settings/page": {
+          "moduleId": 755864,
+          "async": true,
+          "exportedName": "resetApplicationData",
+          "filename": "src/app/(app)/admin/settings/actions.ts"
+        }
+      },
+      "exportedName": "resetApplicationData",
+      "filename": "src/app/(app)/admin/settings/actions.ts"
+    }
+  },
+  "edge": {}
+}

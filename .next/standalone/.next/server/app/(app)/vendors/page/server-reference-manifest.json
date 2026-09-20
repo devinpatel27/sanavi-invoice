@@ -1,0 +1,29 @@
+{
+  "node": {
+    "404fb36b03a85e020b1aaacf60b9fdef9d253fb58a": {
+      "workers": {
+        "app/(app)/vendors/page": {
+          "moduleId": 830896,
+          "async": true,
+          "exportedName": "deleteVendor",
+          "filename": "src/app/(app)/vendors/actions.ts"
+        }
+      },
+      "exportedName": "deleteVendor",
+      "filename": "src/app/(app)/vendors/actions.ts"
+    },
+    "40fbf426a4d6b3cd02073ef709834548b6637fa297": {
+      "workers": {
+        "app/(app)/vendors/page": {
+          "moduleId": 830896,
+          "async": true,
+          "exportedName": "createVendor",
+          "filename": "src/app/(app)/vendors/actions.ts"
+        }
+      },
+      "exportedName": "createVendor",
+      "filename": "src/app/(app)/vendors/actions.ts"
+    }
+  },
+  "edge": {}
+}

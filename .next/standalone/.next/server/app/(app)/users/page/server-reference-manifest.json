@@ -1,0 +1,41 @@
+{
+  "node": {
+    "40174208e30dca795087340f668dad102b4bea52a2": {
+      "workers": {
+        "app/(app)/users/page": {
+          "moduleId": 253666,
+          "async": true,
+          "exportedName": "createUser",
+          "filename": "src/app/(app)/users/actions.ts"
+        }
+      },
+      "exportedName": "createUser",
+      "filename": "src/app/(app)/users/actions.ts"
+    },
+    "40086fafe65b083787cdbf03c6813d33d48142f4d3": {
+      "workers": {
+        "app/(app)/users/page": {
+          "moduleId": 253666,
+          "async": true,
+          "exportedName": "deleteUser",
+          "filename": "src/app/(app)/users/actions.ts"
+        }
+      },
+      "exportedName": "deleteUser",
+      "filename": "src/app/(app)/users/actions.ts"
+    },
+    "408a67137e423b4a66f5069619bb571a4b61fcd9ba": {
+      "workers": {
+        "app/(app)/users/page": {
+          "moduleId": 253666,
+          "async": true,
+          "exportedName": "updateUser",
+          "filename": "src/app/(app)/users/actions.ts"
+        }
+      },
+      "exportedName": "updateUser",
+      "filename": "src/app/(app)/users/actions.ts"
+    }
+  },
+  "edge": {}
+}

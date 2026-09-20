@@ -1,0 +1,17 @@
+{
+  "node": {
+    "40892c9c1669fa56eb94f1a4f2c81f4ebbaf36ae35": {
+      "workers": {
+        "app/(app)/categories/page": {
+          "moduleId": 876496,
+          "async": true,
+          "exportedName": "createCategory",
+          "filename": "src/app/(app)/categories/actions.ts"
+        }
+      },
+      "exportedName": "createCategory",
+      "filename": "src/app/(app)/categories/actions.ts"
+    }
+  },
+  "edge": {}
+}

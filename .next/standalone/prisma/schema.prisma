@@ -1,0 +1,289 @@
+// Construction Material Invoice & Billing System
+// See project plan for background on the data model.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Auth
+// ---------------------------------------------------------------------------
+
+enum Role {
+  ADMIN
+  STAFF
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         Role     @default(STAFF)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // STAFF users are scoped to specific projects; ADMIN sees everything.
+  projectAssignments ProjectAssignment[]
+  uploadedInvoices   Invoice[]           @relation("UploadedBy")
+  reviewedInvoices   Invoice[]           @relation("ReviewedBy")
+  auditLogs          AuditLog[]
+  payments           Payment[]           @relation("PaidBy")
+  projectNotes       ProjectNote[]
+  activityLogs       ActivityLog[]
+}
+
+// ---------------------------------------------------------------------------
+// Core taxonomy: Project -> Category -> Material, Vendor
+// ---------------------------------------------------------------------------
+
+enum ProjectStatus {
+  ACTIVE
+  COMPLETED
+  ARCHIVED
+}
+
+model Project {
+  id          String        @id @default(cuid())
+  name        String
+  description String?
+  address     String?
+  status      ProjectStatus @default(ACTIVE)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  invoices    Invoice[]
+  assignments ProjectAssignment[]
+  notes       ProjectNote[]
+}
+
+model ProjectAssignment {
+  id        String   @id @default(cuid())
+  userId    String
+  projectId String
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, projectId])
+}
+
+model ProjectNote {
+  id        String   @id @default(cuid())
+  projectId String
+  userId    String
+  content   String
+  createdAt DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([userId])
+}
+
+model Category {
+  id        String   @id @default(cuid())
+  name      String   @unique // Plumbing, Steel, Cement, Jaquar, Sumeru 501...
+  unit      String? // default unit for quick entry
+  createdAt DateTime @default(now())
+
+  materials Material[]
+  invoices  Invoice[]
+}
+
+model Material {
+  id          String   @id @default(cuid())
+  categoryId  String
+  name        String
+  hsnCode     String?
+  defaultUnit String // NOS, BAG, KG, MTR, PKT...
+  createdAt   DateTime @default(now())
+
+  category  Category          @relation(fields: [categoryId], references: [id])
+  lineItems InvoiceLineItem[]
+
+  @@unique([categoryId, name])
+}
+
+model Vendor {
+  id        String   @id @default(cuid())
+  name      String
+  gstin     String?  @unique
+  address   String?
+  contact   String?
+  createdAt DateTime @default(now())
+
+  invoices Invoice[]
+}
+
+// ---------------------------------------------------------------------------
+// Invoices
+// ---------------------------------------------------------------------------
+
+enum InvoiceStatus {
+  PROCESSING
+  NEEDS_REVIEW
+  UNPAID
+  PARTIALLY_PAID
+  PAID
+  OVERDUE
+}
+
+model Invoice {
+  id            String   @id @default(cuid())
+  invoiceNumber String
+  projectId     String
+  vendorId      String
+  categoryId    String?
+  invoiceDate   DateTime
+  dueDate       DateTime?
+  deliveryDate  DateTime?
+
+  subtotal Decimal @default(0) @db.Decimal(14, 2)
+  sgst     Decimal @default(0) @db.Decimal(14, 2)
+  cgst     Decimal @default(0) @db.Decimal(14, 2)
+  igst     Decimal @default(0) @db.Decimal(14, 2)
+  rounding Decimal @default(0) @db.Decimal(14, 2)
+  total    Decimal @default(0) @db.Decimal(14, 2)
+
+  paymentTerms String?
+  status       InvoiceStatus @default(PROCESSING)
+  paidAt       DateTime? // set when marked PAID; cleared when marked UNPAID
+
+  fileUrl       String // original uploaded PDF/image in Azure Blob Storage
+  extractionRaw Json? // raw Azure Document Intelligence response, for audit
+
+  uploadedById String?
+  reviewedById String?
+  reviewedAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project    Project           @relation(fields: [projectId], references: [id])
+  vendor     Vendor            @relation(fields: [vendorId], references: [id])
+  category   Category?         @relation(fields: [categoryId], references: [id])
+  uploadedBy User?             @relation("UploadedBy", fields: [uploadedById], references: [id])
+  reviewedBy User?             @relation("ReviewedBy", fields: [reviewedById], references: [id])
+  lineItems  InvoiceLineItem[]
+  payments   Payment[]
+  auditLogs  AuditLog[]
+
+  @@unique([vendorId, invoiceNumber])
+  @@index([projectId])
+  @@index([vendorId])
+  @@index([categoryId])
+  @@index([status])
+  @@index([invoiceDate])
+}
+
+model InvoiceLineItem {
+  id          String  @id @default(cuid())
+  invoiceId   String
+  materialId  String?
+  description String
+  hsnCode     String?
+
+  quantity    Decimal @db.Decimal(14, 3)
+  unit        String
+  rateExclGst Decimal @db.Decimal(14, 4)
+  gstPercent  Decimal @default(0) @db.Decimal(5, 2)
+  gstAmount   Decimal @default(0) @db.Decimal(14, 2)
+  lineTotal   Decimal @db.Decimal(14, 2)
+
+  // Rate anomaly detection: how far this line's rate deviated from the
+  // material's rolling average at the time it was saved.
+  rateDeviationPercent Decimal? @db.Decimal(6, 2)
+
+  invoice  Invoice   @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  material Material? @relation(fields: [materialId], references: [id])
+
+  @@index([materialId])
+}
+
+model Payment {
+  id        String   @id @default(cuid())
+  invoiceId String
+  amount    Decimal  @db.Decimal(14, 2)
+  paidOn    DateTime
+  mode      String? // NEFT, cheque, UPI...
+  reference String?
+  notes     String?
+  paidById  String?
+  createdAt DateTime @default(now())
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  paidBy  User?   @relation("PaidBy", fields: [paidById], references: [id], onDelete: SetNull)
+
+  @@index([invoiceId])
+  @@index([paidOn])
+  @@index([paidById])
+}
+
+// ---------------------------------------------------------------------------
+// Audit trail — tracks manual edits made to AI-extracted fields.
+// ---------------------------------------------------------------------------
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  invoiceId String
+  userId    String?
+  field     String
+  oldValue  String?
+  newValue  String?
+  createdAt DateTime @default(now())
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  user    User?   @relation(fields: [userId], references: [id])
+
+  @@index([invoiceId])
+}
+
+// ---------------------------------------------------------------------------
+// Activity log — system-wide audit of important admin/user actions.
+// ---------------------------------------------------------------------------
+
+model ActivityLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  action    String // e.g. USER_CREATED, INVOICE_PAID, PROJECT_UPDATED
+  module    String // e.g. AUTH, USER, PROJECT, INVOICE, PAYMENT
+  entityId  String?
+  details   Json?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([module, createdAt])
+  @@index([userId])
+  @@index([createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// API error log — centralized backend error tracking (admin only).
+// ---------------------------------------------------------------------------
+
+model ApiErrorLog {
+  id         String   @id @default(cuid())
+  statusCode Int
+  errorCode  String
+  endpoint   String
+  method     String
+  userId     String?
+  message    String
+  requestId  String
+  stack      String?
+  createdAt  DateTime @default(now())
+
+  @@index([errorCode])
+  @@index([createdAt])
+}

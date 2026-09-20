@@ -1,0 +1,17 @@
+{
+  "node": {
+    "40b00eaf1a81dafe3d14098db00b4b75e5c1d52ee7": {
+      "workers": {
+        "app/(app)/projects/[id]/page": {
+          "moduleId": 906170,
+          "async": true,
+          "exportedName": "addProjectNote",
+          "filename": "src/app/(app)/projects/actions.ts"
+        }
+      },
+      "exportedName": "addProjectNote",
+      "filename": "src/app/(app)/projects/actions.ts"
+    }
+  },
+  "edge": {}
+}
