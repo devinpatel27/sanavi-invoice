@@ -51,12 +51,20 @@ jobs:
           cp -r public .next/standalone/
           cp -r .next/static .next/standalone/.next/
           ls .next/standalone/server.js
+          mkdir -p /tmp/sanavi-deploy
+          cp -r .next/standalone /tmp/sanavi-deploy/standalone
+          cp .env.example README.md /tmp/sanavi-deploy/
 
       - name: Publish deploy branch
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git checkout -B deploy
+          git fetch origin deploy
+          git checkout -B deploy origin/deploy
+          rm -rf .next/standalone
+          mkdir -p .next
+          cp -r /tmp/sanavi-deploy/standalone .next/standalone
+          cp /tmp/sanavi-deploy/.env.example /tmp/sanavi-deploy/README.md .
           git add -f .next/standalone .env.example README.md
           git commit -m "deploy: ${GITHUB_SHA}" || echo "nothing to commit"
-          git push -f origin deploy
+          git push origin deploy

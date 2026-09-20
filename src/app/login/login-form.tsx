@@ -70,7 +70,7 @@ export function LoginForm() {
             type="email"
             inputMode="email"
             autoComplete="email"
-            placeholder="staff@example.com"
+            placeholder="staff@sanvicasagroup.in"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             className="h-11 text-base md:h-10 md:text-sm"
