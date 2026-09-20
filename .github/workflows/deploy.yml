@@ -1,0 +1,62 @@
+name: Build and ship standalone bundle
+
+# Builds the Next.js standalone server in CI and pushes ONLY the runnable
+# output to the `deploy` branch. The host never builds:
+#   git pull (deploy branch) -> ensure .env -> panel Restart
+#   startup command: node .next/standalone/server.js (port 3000)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-ship:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Apply database migrations
+        run: node node_modules/prisma/build/index.js migrate deploy
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+      - name: Build standalone bundle
+        run: npm run build
+        env:
+          # Dummy build-time env. Pages are dynamic, so the build never
+          # touches the database. Real secrets live in the server's .env.
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci?schema=public
+          AUTH_SECRET: ci-build-placeholder-not-a-secret
+          AUTH_TRUST_HOST: "true"
+          AUTH_URL: http://localhost:3000
+          AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT: https://example.cognitiveservices.azure.com/
+          AZURE_DOCUMENT_INTELLIGENCE_KEY: ci-placeholder
+
+      - name: Assemble runnable layout
+        run: |
+          cp -r public .next/standalone/
+          cp -r .next/static .next/standalone/.next/
+          ls .next/standalone/server.js
+
+      - name: Publish deploy branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -B deploy
+          git add -f .next/standalone .env.example README.md
+          git commit -m "deploy: ${GITHUB_SHA}" || echo "nothing to commit"
+          git push -f origin deploy

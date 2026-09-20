@@ -1,6 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Produces a self-contained `.next/standalone` server (server.js + traced
+  // deps). CI builds it, the host only runs `node .next/standalone/server.js`
+  // — no build or full install needed on the server.
+  output: "standalone",
   // Allow Cloudflare Tunnel hosts to load Next.js client JS in development.
   // Without this, the tunnel page gets HTML but no JS → form falls back to GET
   // and auth appears to "bounce" back to /login.
