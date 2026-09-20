@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { invoiceAccessWhere } from "@/lib/invoices/access";
 import { PaymentDeleteButton } from "./payment-delete-button";
+import { getProjectScope } from "@/lib/projects/scope";
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("en-IN", {
@@ -18,18 +19,22 @@ export default async function PaymentsPage() {
   const session = await auth();
   if (!session?.user) return null;
   const access = invoiceAccessWhere({ id: session.user.id, role: session.user.role });
+  const projectScope = await getProjectScope({ id: session.user.id, role: session.user.role });
+  const scopedAccess = projectScope.selectedProjectId
+    ? { AND: [access, { projectId: projectScope.selectedProjectId }] }
+    : access;
   const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 
   const [payments, payableInvoices] = await Promise.all([
     db.payment.findMany({
-      where: { invoice: { is: access } },
+      where: { invoice: { is: scopedAccess } },
       include: { invoice: { include: { vendor: true, category: true, project: true } } },
       orderBy: [{ paidOn: "desc" }, { createdAt: "desc" }],
       take: 200,
     }),
     db.invoice.findMany({
       where: {
-        ...access,
+        ...scopedAccess,
         status: { in: ["UNPAID", "PARTIALLY_PAID", "OVERDUE", "PAID"] },
       },
       select: { total: true, payments: { select: { amount: true, paidOn: true } } },

@@ -26,6 +26,7 @@ import { InvoiceFilters } from "./invoice-filters";
 import { InvoicePaymentControls } from "./invoice-payment-controls";
 import { InvoiceDeleteButton } from "./invoice-delete-button";
 import { InvoiceFilePreview } from "@/components/invoice-file-preview";
+import { getProjectScope } from "@/lib/projects/scope";
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("en-IN", {
@@ -73,8 +74,15 @@ export default async function InvoicesPage({
     id: session.user.id,
     role: session.user.role,
   });
+  const projectScope = await getProjectScope({
+    id: session.user.id,
+    role: session.user.role,
+  });
 
   const andFilters: Prisma.InvoiceWhereInput[] = [];
+  if (projectScope.selectedProjectId) {
+    andFilters.push({ projectId: projectScope.selectedProjectId });
+  }
   if (params.vendorId) andFilters.push({ vendorId: params.vendorId });
   if (params.categoryId) andFilters.push({ categoryId: params.categoryId });
   if (params.status) {

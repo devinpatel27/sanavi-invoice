@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { auth } from "@/lib/auth";
 import type { Prisma } from "@/generated/prisma/client";
+import { getProjectScope } from "@/lib/projects/scope";
 import {
   DashboardView,
   type CategorySpendPoint,
@@ -47,6 +48,13 @@ export default async function DashboardPage({
 
   const params = await searchParams;
   const selectedCategoryId = params.categoryId ?? "";
+  const projectScope = await getProjectScope({
+    id: session.user.id,
+    role: session.user.role,
+  });
+  const projectFilter: Prisma.InvoiceWhereInput = projectScope.selectedProjectId
+    ? { projectId: projectScope.selectedProjectId }
+    : {};
 
   const now = new Date();
   const trendStart = new Date(now.getFullYear(), now.getMonth() - 11, 1);
@@ -92,38 +100,41 @@ export default async function DashboardPage({
     projectBreakdown,
   ] = await Promise.all([
     db.invoice.aggregate({
-      where: { ...confirmed, ...categoryFilter, ...dateFilter },
+      where: { ...confirmed, ...projectFilter, ...categoryFilter, ...dateFilter },
       _sum: { total: true },
     }),
     db.payment.aggregate({
       where: {
         ...paymentDateFilter,
-        invoice: { is: { ...confirmed, ...categoryFilter } },
+        invoice: { is: { ...confirmed, ...projectFilter, ...categoryFilter } },
       },
       _sum: { amount: true },
     }),
     db.invoice.count({
       where: {
         status: { in: ["UNPAID", "PARTIALLY_PAID"] },
+        ...projectFilter,
         ...categoryFilter,
         ...dateFilter,
       },
     }),
     db.invoice.count({
-      where: { status: "OVERDUE", ...categoryFilter, ...dateFilter },
+      where: { status: "OVERDUE", ...projectFilter, ...categoryFilter, ...dateFilter },
     }),
-    db.project.count(),
+    projectScope.selectedProjectId
+      ? Promise.resolve(1)
+      : db.project.count(),
     db.vendor.count({
-      where: { invoices: { some: { ...confirmed, ...dateFilter } } },
+      where: { invoices: { some: { ...confirmed, ...projectFilter, ...dateFilter } } },
     }),
     db.invoice.groupBy({
       by: ["categoryId"],
-      where: { ...confirmed, ...dateFilter },
+      where: { ...confirmed, ...projectFilter, ...dateFilter },
       _sum: { total: true },
       _count: true,
     }),
     db.invoice.findMany({
-      where: { invoiceDate: { gte: trendStart }, ...confirmed, ...categoryFilter },
+      where: { invoiceDate: { gte: trendStart }, ...confirmed, ...projectFilter, ...categoryFilter },
       select: { invoiceDate: true, total: true, payments: { select: { amount: true } } },
     }),
     db.category.findMany({
@@ -131,7 +142,7 @@ export default async function DashboardPage({
       select: { id: true, name: true },
     }),
     db.invoice.findMany({
-      where: { ...confirmed, ...categoryFilter, ...dateFilter },
+      where: { ...confirmed, ...projectFilter, ...categoryFilter, ...dateFilter },
       select: {
         id: true,
         invoiceNumber: true,
@@ -144,7 +155,7 @@ export default async function DashboardPage({
       },
     }),
     db.invoice.findMany({
-      where: { ...confirmed, ...categoryFilter, ...dateFilter },
+      where: { ...confirmed, ...projectFilter, ...categoryFilter, ...dateFilter },
       orderBy: { invoiceDate: "desc" },
       take: 8,
       select: {
@@ -158,7 +169,7 @@ export default async function DashboardPage({
     }),
     db.invoice.groupBy({
       by: ["projectId"],
-      where: { ...confirmed, ...categoryFilter, ...dateFilter },
+      where: { ...confirmed, ...projectFilter, ...categoryFilter, ...dateFilter },
       _sum: { total: true },
       _count: true,
     }),
@@ -254,14 +265,20 @@ export default async function DashboardPage({
   const revenue = Number(revenueAgg._sum.total ?? 0);
   const paid = Number(paidAgg._sum.amount ?? 0);
   const pending = Math.max(0, outstandingTotal);
+  const selectedProject = projectScope.projects.find(
+    (project) => project.id === projectScope.selectedProjectId
+  );
 
   return (
     <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Overview of material purchase invoices and spend
-          {selectedCategoryId ? " · filtered by category" : ""}.
+          {`${
+            selectedProject
+              ? `${selectedProject.name} purchase invoices and spend`
+              : "Overview of all project purchase invoices and spend"
+          }${selectedCategoryId ? " · filtered by category" : ""}.`}
         </p>
       </div>
 

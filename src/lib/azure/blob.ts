@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "fs/promises";
+import { mkdir, rm, writeFile } from "fs/promises";
 import path from "path";
 import { BlobServiceClient } from "@azure/storage-blob";
 
@@ -68,4 +68,43 @@ export async function uploadInvoiceFile(
     return uploadInvoiceFileAzure(filename, contents, contentType);
   }
   return uploadInvoiceFileLocal(filename, contents);
+}
+
+/** Best-effort cleanup for files that belonged to deleted invoice records. */
+export async function deleteInvoiceFiles(fileUrls: string[]) {
+  const failures: string[] = [];
+  const containerName = process.env.AZURE_STORAGE_CONTAINER_NAME ?? "invoices";
+  const containerClient = isBlobStorageConfigured()
+    ? getBlobServiceClient().getContainerClient(containerName)
+    : null;
+
+  for (const fileUrl of fileUrls) {
+    try {
+      if (fileUrl.startsWith("local://.data/uploads/")) {
+        const filename = path.basename(fileUrl.replace(/^local:\/\//, ""));
+        await rm(path.join(process.cwd(), ".data", "uploads", filename), {
+          force: true,
+        });
+        continue;
+      }
+
+      if (containerClient && /^https?:\/\//.test(fileUrl)) {
+        const url = new URL(fileUrl);
+        const marker = `/${containerName}/`;
+        const markerIndex = url.pathname.indexOf(marker);
+        if (markerIndex >= 0) {
+          const blobName = decodeURIComponent(
+            url.pathname.slice(markerIndex + marker.length)
+          );
+          if (blobName) {
+            await containerClient.deleteBlob(blobName, { deleteSnapshots: "include" });
+          }
+        }
+      }
+    } catch {
+      failures.push(fileUrl);
+    }
+  }
+
+  return failures;
 }

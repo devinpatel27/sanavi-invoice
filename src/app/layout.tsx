@@ -25,8 +25,18 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "Sanvicasa Invoice & Billing",
+  title: {
+    default: "Sanvicasa Invoice & Billing",
+    template: "%s | Sanvicasa",
+  },
   description: "Construction material invoice & billing system",
+  applicationName: "Sanvicasa Invoice & Billing",
+  appleWebApp: {
+    capable: true,
+    title: "Sanvicasa",
+    statusBarStyle: "default",
+  },
+  formatDetection: { telephone: false },
 };
 
 export default function RootLayout({

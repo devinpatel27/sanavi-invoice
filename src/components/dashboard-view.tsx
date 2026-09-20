@@ -24,6 +24,8 @@ import {
   Clock,
   FolderKanban,
   IndianRupee,
+  SlidersHorizontal,
+  ChevronDown,
   TrendingUp,
 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -151,6 +153,7 @@ export function DashboardView({
   const [tab, setTab] = useState("overview");
   const [fromVal, setFromVal] = useState(from);
   const [toVal, setToVal] = useState(to);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   function applyFilters(overrides?: { from?: string; to?: string; categoryId?: string }) {
     const params = new URLSearchParams(searchParams.toString());
@@ -197,6 +200,7 @@ export function DashboardView({
   const hasMonthData = monthlySpend.some((p) => p.total > 0);
   const hasCategoryData = categorySpend.length > 0;
   const hasProjectData = projectSpend.length > 0;
+  const activeFilterCount = [fromVal, toVal, selectedCategoryId].filter(Boolean).length;
 
   const kpis = [
     { label: "Revenue", value: formatInr(revenue), icon: IndianRupee, tone: "text-foreground" },
@@ -210,8 +214,25 @@ export function DashboardView({
   return (
     <div className="flex flex-col gap-4">
       {/* Filters */}
-      <div className="flex flex-col gap-3 rounded-2xl border bg-card/60 p-3.5">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 lg:items-end">
+      <div className="flex flex-col gap-3 rounded-xl border bg-card/60 p-3.5">
+        <button
+          type="button"
+          className="flex h-10 items-center justify-between gap-3 text-sm font-medium md:hidden"
+          aria-expanded={filtersOpen}
+          onClick={() => setFiltersOpen((open) => !open)}
+        >
+          <span className="flex items-center gap-2">
+            <SlidersHorizontal className="size-4" />
+            Filters
+            {activeFilterCount > 0 && (
+              <Badge variant="secondary" className="min-w-5 justify-center px-1.5">
+                {activeFilterCount}
+              </Badge>
+            )}
+          </span>
+          <ChevronDown className={`size-4 transition-transform ${filtersOpen ? "rotate-180" : ""}`} />
+        </button>
+        <div className={`${filtersOpen ? "grid" : "hidden"} gap-3 border-t pt-3 sm:grid-cols-2 md:grid md:border-0 md:pt-0 lg:grid-cols-4 lg:items-end`}>
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs text-muted-foreground">From</Label>
             <Input
@@ -277,17 +298,17 @@ export function DashboardView({
       </div>
 
       {/* KPI cards */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-6">
         {kpis.map((kpi) => {
           const Icon = kpi.icon;
           return (
-            <Card key={kpi.label} className="transition-all duration-200 hover:-translate-y-0.5 hover:shadow-sm">
-              <CardHeader className="pb-2">
+            <Card key={kpi.label} className="min-w-0 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-sm">
+              <CardHeader className="gap-1 p-3 sm:p-4">
                 <CardDescription className="flex items-center gap-1.5">
                   <Icon className="size-3.5" />
                   {kpi.label}
                 </CardDescription>
-                <CardTitle className={`text-xl tabular-nums ${kpi.tone}`}>{kpi.value}</CardTitle>
+                <CardTitle className={`truncate text-lg tabular-nums sm:text-xl ${kpi.tone}`}>{kpi.value}</CardTitle>
               </CardHeader>
             </Card>
           );
@@ -313,7 +334,7 @@ export function DashboardView({
                 {!hasMonthData ? (
                   <ChartEmpty message="No invoice totals yet. Upload and confirm invoices to see the trend." />
                 ) : (
-                  <div className="h-[260px] w-full min-w-0">
+                  <div className="h-[220px] w-full min-w-0 sm:h-[260px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <AreaChart data={monthlySpend} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                         <defs>

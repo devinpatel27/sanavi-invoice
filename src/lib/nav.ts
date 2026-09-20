@@ -10,6 +10,7 @@ import {
   FolderKanban,
   ScrollText,
   Bug,
+  Settings,
   type LucideIcon,
 } from "lucide-react";
 
@@ -40,6 +41,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/users", label: "Users", icon: Users, adminOnly: true },
   { href: "/admin/activity", label: "Activity Logs", icon: ScrollText, adminOnly: true },
   { href: "/admin/errors", label: "Error Logs", icon: Bug, adminOnly: true },
+  { href: "/admin/settings", label: "Settings", icon: Settings, adminOnly: true },
 ];
 
 export function getNavItemsForRole(role: "ADMIN" | "STAFF") {

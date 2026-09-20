@@ -45,10 +45,23 @@ export async function POST(request: Request) {
       );
     }
 
+    const projectIdRaw = formData.get("projectId");
+    const projectId =
+      typeof projectIdRaw === "string" && projectIdRaw.trim()
+        ? projectIdRaw.trim()
+        : null;
+    if (!projectId) {
+      return NextResponse.json(
+        { error: "Please select a project before extracting." },
+        { status: 400 }
+      );
+    }
+
     const result = await processInvoiceUpload({
       file,
       userId: user.id,
       role: user.role,
+      projectId,
       categoryId,
     });
 

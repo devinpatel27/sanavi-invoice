@@ -14,12 +14,18 @@ import { isDocumentIntelligenceConfigured } from "@/lib/azure/document-intellige
 import { isBlobStorageConfigured } from "@/lib/azure/blob";
 import { UploadDropzone } from "./upload-dropzone";
 import { ClipboardList } from "lucide-react";
+import { getProjectScope } from "@/lib/projects/scope";
 
 export default async function UploadInvoicePage() {
   const session = await auth();
   const isStaff = session?.user.role === "STAFF";
   const diConfigured = isDocumentIntelligenceConfigured();
   const blobConfigured = isBlobStorageConfigured();
+  if (!session?.user) return null;
+  const projectScope = await getProjectScope({
+    id: session.user.id,
+    role: session.user.role,
+  });
 
   const [pendingCount, categories] = await Promise.all([
     session?.user.id && isStaff
@@ -101,7 +107,11 @@ export default async function UploadInvoicePage() {
               </p>
             </div>
           ) : (
-            <UploadDropzone categories={categories} />
+            <UploadDropzone
+              categories={categories}
+              projects={projectScope.projects}
+              initialProjectId={projectScope.selectedProjectId}
+            />
           )}
         </CardContent>
       </Card>

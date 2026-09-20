@@ -39,6 +39,7 @@ const ALLOWED = new Set([
 type Stage = "idle" | "uploading" | "extracting" | "done" | "error";
 
 export type UploadCategory = { id: string; name: string };
+export type UploadProject = { id: string; name: string; status: string };
 
 function formatBytes(n: number) {
   if (n < 1024) return `${n} B`;
@@ -54,14 +55,21 @@ function isAllowedFile(file: File) {
 
 export function UploadDropzone({
   categories: initialCategories,
+  projects,
+  initialProjectId,
 }: {
   categories: UploadCategory[];
+  projects: UploadProject[];
+  initialProjectId: string | null;
 }) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
   const [categories, setCategories] = useState(initialCategories);
   const [categoryId, setCategoryId] = useState(initialCategories[0]?.id ?? "");
+  const [projectId, setProjectId] = useState(
+    initialProjectId ?? (projects.length === 1 ? projects[0].id : "")
+  );
   const [newCategoryName, setNewCategoryName] = useState("");
   const [creatingCategory, startCreateCategory] = useTransition();
   const [file, setFile] = useState<File | null>(null);
@@ -174,6 +182,11 @@ export function UploadDropzone({
       toast.error("Select a category before extracting");
       return;
     }
+    if (!projectId) {
+      setError("Select the project this invoice belongs to.");
+      toast.error("Select a project before extracting");
+      return;
+    }
 
     setError(null);
     setStage("uploading");
@@ -181,6 +194,7 @@ export function UploadDropzone({
     const formData = new FormData();
     formData.append("file", file);
     formData.append("categoryId", categoryId);
+    formData.append("projectId", projectId);
 
     const extractingTimer = window.setTimeout(() => {
       setStage("extracting");
@@ -227,12 +241,37 @@ export function UploadDropzone({
   const isPdf =
     file?.type === "application/pdf" ||
     file?.name.toLowerCase().endsWith(".pdf");
-  const canExtract = Boolean(file && categoryId && !busy);
+  const canExtract = Boolean(file && projectId && categoryId && !busy);
   const hasCategories = categories.length > 0;
 
   return (
     <div className="flex flex-col gap-5 sm:gap-6">
       <section className="space-y-3 sm:space-y-4">
+        <div className="grid gap-2">
+          <Label htmlFor="upload-project" className="text-sm font-medium">
+            Project <span className="text-destructive">*</span>
+          </Label>
+          <Select
+            value={projectId || null}
+            onValueChange={(value) => setProjectId(value ?? "")}
+            items={projects.map((project) => ({ value: project.id, label: project.name }))}
+            disabled={busy || projects.length === 0}
+          >
+            <SelectTrigger id="upload-project" size="lg" className="w-full">
+              <SelectValue placeholder="Select project…" />
+            </SelectTrigger>
+            <SelectContent align="start" alignItemWithTrigger={false}>
+              {projects.map((project) => (
+                <SelectItem key={project.id} value={project.id}>
+                  {project.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            The invoice, review, payments, and reports will stay with this project.
+          </p>
+        </div>
         <div className="grid gap-2">
           <Label htmlFor="upload-category" className="text-sm font-medium">
             Invoice category <span className="text-destructive">*</span>
@@ -534,6 +573,8 @@ export function UploadDropzone({
               <UploadCloud className="size-4" />
               Select or snap an invoice to extract
             </>
+          ) : !projectId ? (
+            "Select a project above to continue"
           ) : !categoryId ? (
             "Select category above to continue"
           ) : (

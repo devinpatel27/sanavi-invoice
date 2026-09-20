@@ -5,6 +5,7 @@ import {
   type ExtractedInvoice,
 } from "@/lib/azure/document-intelligence";
 import { uploadInvoiceFile } from "@/lib/azure/blob";
+import { assertProjectAccess } from "@/lib/projects/access";
 
 const MAX_BYTES = 20 * 1024 * 1024;
 const ALLOWED_TYPES = new Set([
@@ -21,25 +22,6 @@ function halfTax(totalTax: number | undefined) {
   // Assume intra-state CGST+SGST split when only TotalTax is present.
   const half = Math.round((totalTax / 2) * 100) / 100;
   return { sgst: half, cgst: half, igst: 0 };
-}
-
-async function resolveProjectId(userId: string, role: "ADMIN" | "STAFF") {
-  if (role === "STAFF") {
-    const assignment = await db.projectAssignment.findFirst({
-      where: { userId },
-      orderBy: { createdAt: "asc" },
-    });
-    if (assignment) return assignment.projectId;
-  }
-
-  const project =
-    (await db.project.findUnique({ where: { id: "demo-project" } })) ??
-    (await db.project.findFirst({ orderBy: { createdAt: "asc" } }));
-
-  if (!project) {
-    throw new Error("No project found. Run the seed script first.");
-  }
-  return project.id;
 }
 
 async function resolveVendor(extracted: ExtractedInvoice) {
@@ -75,9 +57,10 @@ export async function processInvoiceUpload(params: {
   file: File;
   userId: string;
   role: "ADMIN" | "STAFF";
+  projectId: string;
   categoryId?: string | null;
 }) {
-  const { file, userId, role, categoryId } = params;
+  const { file, userId, role, projectId, categoryId } = params;
 
   if (!ALLOWED_TYPES.has(file.type)) {
     throw new Error("Only PDF, JPG, or PNG files are supported.");
@@ -112,7 +95,7 @@ export async function processInvoiceUpload(params: {
     );
   }
 
-  const projectId = await resolveProjectId(userId, role);
+  await assertProjectAccess(projectId, { id: userId, role });
   const vendor = await resolveVendor(extracted);
 
   const invoiceNumber =

@@ -19,6 +19,8 @@ import {
   Bug,
   LogOut,
   ChevronRight,
+  Settings,
+  Download,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -64,6 +66,12 @@ export function MobileBottomBar({ role, name, email }: MobileBottomBarProps) {
 
   const adminMoreItems = [
     {
+      href: "/api/admin/export?dataset=all&format=xlsx",
+      label: "Download all data",
+      description: "Excel workbook with every database table",
+      icon: Download,
+    },
+    {
       href: "/projects",
       label: "Projects",
       description: "Sites, teams & spend per project",
@@ -104,6 +112,12 @@ export function MobileBottomBar({ role, name, email }: MobileBottomBarProps) {
       label: "Error Logs",
       description: "API errors & request ids",
       icon: Bug,
+    },
+    {
+      href: "/admin/settings",
+      label: "Settings",
+      description: "Application settings & data reset",
+      icon: Settings,
     },
   ];
 
