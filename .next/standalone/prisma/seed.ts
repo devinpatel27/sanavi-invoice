@@ -92,8 +92,8 @@ async function main() {
     create: { id: "demo-project", name: "Sanvicasa Saharsh", address: "" },
   });
 
-  const adminEmail = process.env.SEED_ADMIN_EMAIL ?? "admin@example.com";
-  const adminPassword = process.env.SEED_ADMIN_PASSWORD ?? "ChangeMe123!";
+  const adminEmail = process.env.SEED_ADMIN_EMAIL ?? "admin@sanvicasagroup.in";
+  const adminPassword = process.env.SEED_ADMIN_PASSWORD ?? "admin@sanvicasa26";
   const adminPasswordHash = await bcrypt.hash(adminPassword, 12);
 
   console.log(`Seeding admin user (${adminEmail})...`);
@@ -108,13 +108,16 @@ async function main() {
     },
   });
 
-  console.log("Seeding demo staff user (staff@example.com / Staff123!)...");
-  const staffPasswordHash = await bcrypt.hash("Staff123!", 12);
+  const staffEmail = process.env.SEED_STAFF_EMAIL ?? "staff@sanvicasagroup.in";
+  const staffPassword = process.env.SEED_STAFF_PASSWORD ?? "staff@sanvicasa26";
+  const staffPasswordHash = await bcrypt.hash(staffPassword, 12);
+
+  console.log(`Seeding staff user (${staffEmail})...`);
   const staff = await db.user.upsert({
-    where: { email: "staff@example.com" },
+    where: { email: staffEmail },
     update: {},
     create: {
-      email: "staff@example.com",
+      email: staffEmail,
       name: "Staff",
       passwordHash: staffPasswordHash,
       role: "STAFF",
@@ -129,7 +132,7 @@ async function main() {
 
   console.log("Seed complete.");
   console.log(`  Admin login: ${admin.email} / ${adminPassword}`);
-  console.log(`  Staff login: ${staff.email} / Staff123!`);
+  console.log(`  Staff login: ${staff.email} / ${staffPassword}`);
 }
 
 main()

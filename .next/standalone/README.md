@@ -81,10 +81,10 @@ Open **http://localhost:3000**
 
 ### Seeded logins
 
-| Role  | Email               | Password      |
-| ----- | ------------------- | ------------- |
-| ADMIN | admin@example.com   | ChangeMe123!  |
-| STAFF | staff@example.com   | Staff123!     |
+| Role  | Email                       | Password            |
+| ----- | --------------------------- | ------------------- |
+| ADMIN | admin@sanvicasagroup.in     | admin@sanvicasa26   |
+| STAFF | staff@sanvicasagroup.in     | staff@sanvicasa26   |
 
 ---
 
