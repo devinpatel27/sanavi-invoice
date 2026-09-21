@@ -56,6 +56,17 @@ export function AppNav({ role, onNavigate, className }: AppNavProps) {
           </Link>
         );
       })}
+
+      <div className="my-2 border-t border-sidebar-border" />
+      <a
+        href="/docs/Staff_User_Guide.html"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="group flex items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-semibold text-sky-600 dark:text-sky-400 hover:bg-sky-50 dark:hover:bg-sky-950/40 transition-all duration-200"
+      >
+        <span>📖</span>
+        <span>User Guide (માર્ગદર્શિકા)</span>
+      </a>
     </nav>
   );
 }
