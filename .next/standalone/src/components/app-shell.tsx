@@ -127,14 +127,6 @@ export function AppShell({ role, name, email, projects, selectedProjectId, child
                     </>
                   )}
                   <DropdownMenuItem
-                    render={<a href="/docs/Staff_User_Guide.html" target="_blank" rel="noopener noreferrer" />}
-                    className="px-2 py-2 text-sky-600 dark:text-sky-400 font-medium"
-                  >
-                    <span>📖</span>
-                    User Guide (માર્ગદર્શિકા)
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
                     variant="destructive"
                     className="px-2 py-2"
                     onClick={() => signOut({ callbackUrl: "/login" })}
