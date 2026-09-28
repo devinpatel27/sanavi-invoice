@@ -1,18 +1,6 @@
 {
   "node": {
-    "406a6958c3cf87c0e857760d4416e23e1774daf79e": {
-      "workers": {
-        "app/(app)/vendors/page": {
-          "moduleId": 830896,
-          "async": true,
-          "exportedName": "createVendor",
-          "filename": "src/app/(app)/vendors/actions.ts"
-        }
-      },
-      "exportedName": "createVendor",
-      "filename": "src/app/(app)/vendors/actions.ts"
-    },
-    "409659cf75676fd6a786a254ca840131b314bb25e4": {
+    "404503ea862d608c7978d93913153b2517667a08f7": {
       "workers": {
         "app/(app)/vendors/page": {
           "moduleId": 830896,
@@ -22,6 +10,18 @@
         }
       },
       "exportedName": "deleteVendor",
+      "filename": "src/app/(app)/vendors/actions.ts"
+    },
+    "40eb9d5678bba31549cf246618f18ec3e2d0d79e98": {
+      "workers": {
+        "app/(app)/vendors/page": {
+          "moduleId": 830896,
+          "async": true,
+          "exportedName": "createVendor",
+          "filename": "src/app/(app)/vendors/actions.ts"
+        }
+      },
+      "exportedName": "createVendor",
       "filename": "src/app/(app)/vendors/actions.ts"
     }
   },
