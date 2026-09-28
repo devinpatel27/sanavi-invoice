@@ -30,16 +30,19 @@ export function InvoiceDeleteButton({
 
   const handleDelete = async () => {
     try {
-      await deleteInvoice(invoiceId);
-      toast.success(`Invoice #${invoiceNumber} deleted`);
-      if (redirectTo) {
-        router.push(redirectTo);
+      const res = await deleteInvoice(invoiceId);
+      if (res && "ok" in res && res.ok) {
+        toast.success(`Invoice #${invoiceNumber} deleted`);
+        if (redirectTo) {
+          router.push(redirectTo);
+        } else {
+          router.refresh();
+        }
       }
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Failed to delete invoice"
       );
-      throw error;
     }
   };
 

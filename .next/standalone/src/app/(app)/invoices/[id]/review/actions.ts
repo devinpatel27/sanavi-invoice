@@ -158,20 +158,50 @@ export async function confirmInvoiceReview(raw: ConfirmInvoiceInput) {
     invoice.status === "NEEDS_REVIEW" || invoice.status === "PROCESSING";
 
   let vendorId = parsed.vendorId ?? null;
-  if (!vendorId) {
-    const vendor = await createVendorInline({
-      name: parsed.vendorName,
-      gstin: parsed.vendorGstin,
+  const trimmedName = parsed.vendorName.trim();
+  const trimmedGstin = parsed.vendorGstin?.trim() || null;
+
+  if (trimmedGstin) {
+    const existingByGstin = await db.vendor.findUnique({
+      where: { gstin: trimmedGstin },
     });
-    vendorId = vendor.id;
-  } else {
+    if (existingByGstin) {
+      vendorId = existingByGstin.id;
+      if (existingByGstin.name !== trimmedName && trimmedName) {
+        await db.vendor.update({
+          where: { id: existingByGstin.id },
+          data: { name: trimmedName },
+        });
+      }
+    } else if (vendorId) {
+      await db.vendor.update({
+        where: { id: vendorId },
+        data: {
+          name: trimmedName,
+          gstin: trimmedGstin,
+        },
+      });
+    } else {
+      const vendor = await createVendorInline({
+        name: trimmedName,
+        gstin: trimmedGstin,
+      });
+      vendorId = vendor.id;
+    }
+  } else if (vendorId) {
     await db.vendor.update({
       where: { id: vendorId },
       data: {
-        name: parsed.vendorName.trim(),
-        gstin: parsed.vendorGstin?.trim() || null,
+        name: trimmedName,
+        gstin: null,
       },
     });
+  } else {
+    const vendor = await createVendorInline({
+      name: trimmedName,
+      gstin: null,
+    });
+    vendorId = vendor.id;
   }
 
   const duplicate = await checkDuplicateInvoice(
@@ -191,29 +221,40 @@ export async function confirmInvoiceReview(raw: ConfirmInvoiceInput) {
   await db.$transaction(async (tx) => {
     await tx.invoiceLineItem.deleteMany({ where: { invoiceId: invoice.id } });
 
-    for (const item of parsed.lineItems) {
-      let materialId: string | null = null;
-      if (item.createMaterial && parsed.categoryId) {
-        const existingMaterial = await tx.material.findFirst({
-          where: {
-            categoryId: parsed.categoryId,
-            name: { equals: item.description, mode: "insensitive" },
-          },
-        });
-        if (existingMaterial) {
-          materialId = existingMaterial.id;
-        } else {
-          const created = await tx.material.create({
-            data: {
-              categoryId: parsed.categoryId,
-              name: item.description,
-              defaultUnit: item.unit,
-            },
-          });
-          materialId = created.id;
-        }
+    const materialMap = new Map<string, string>();
+    if (parsed.categoryId) {
+      const existingMaterials = await tx.material.findMany({
+        where: { categoryId: parsed.categoryId },
+        select: { id: true, name: true },
+      });
+      for (const m of existingMaterials) {
+        materialMap.set(m.name.toLowerCase().trim(), m.id);
       }
 
+      for (const item of parsed.lineItems) {
+        if (item.createMaterial && item.description.trim()) {
+          const key = item.description.toLowerCase().trim();
+          if (!materialMap.has(key)) {
+            const created = await tx.material.create({
+              data: {
+                categoryId: parsed.categoryId,
+                name: item.description.trim(),
+                defaultUnit: item.unit.trim() || "NOS",
+              },
+              select: { id: true },
+            });
+            materialMap.set(key, created.id);
+          }
+        }
+      }
+    }
+
+    const lineItemsData = parsed.lineItems.map((item) => {
+      const key = item.description.toLowerCase().trim();
+      const materialId =
+        item.createMaterial && parsed.categoryId
+          ? (materialMap.get(key) ?? null)
+          : null;
       const gstAmount =
         Math.round(
           ((item.quantity * item.rateExclGst * item.gstPercent) / 100) * 100
@@ -221,20 +262,20 @@ export async function confirmInvoiceReview(raw: ConfirmInvoiceInput) {
       const lineTotal =
         Math.round((item.quantity * item.rateExclGst + gstAmount) * 100) / 100;
 
-      await tx.invoiceLineItem.create({
-        data: {
-          invoiceId: invoice.id,
-          materialId,
-          description: item.description,
-          quantity: d(item.quantity),
-          unit: item.unit,
-          rateExclGst: d(item.rateExclGst),
-          gstPercent: d(item.gstPercent),
-          gstAmount: d(gstAmount),
-          lineTotal: d(lineTotal),
-        },
-      });
-    }
+      return {
+        invoiceId: invoice.id,
+        materialId,
+        description: item.description,
+        quantity: d(item.quantity),
+        unit: item.unit,
+        rateExclGst: d(item.rateExclGst),
+        gstPercent: d(item.gstPercent),
+        gstAmount: d(gstAmount),
+        lineTotal: d(lineTotal),
+      };
+    });
+
+    await tx.invoiceLineItem.createMany({ data: lineItemsData });
 
     const paidAmount = invoice.payments.reduce(
       (sum, payment) => sum + Number(payment.amount),
@@ -292,9 +333,10 @@ export async function confirmInvoiceReview(raw: ConfirmInvoiceInput) {
   revalidatePath("/projects");
   revalidatePath(`/invoices/${invoice.id}/review`);
   revalidatePath(`/projects/${parsed.projectId}`);
-  redirect(
-    wasDraft
+  return {
+    ok: true as const,
+    redirectUrl: wasDraft
       ? `/invoices?confirmed=${invoice.id}`
-      : `/invoices?updated=${invoice.id}`
-  );
+      : `/invoices?updated=${invoice.id}`,
+  };
 }

@@ -114,6 +114,34 @@ export function ReviewForm({
   const [dupWarning, setDupWarning] = useState(possibleDuplicate);
   const [forceDuplicate, setForceDuplicate] = useState(false);
 
+  const round2 = (num: number) => Math.round((num + Number.EPSILON) * 100) / 100;
+
+  function handleSubtotalChange(val: number) {
+    setSubtotal(val);
+    setTotal(round2(val + sgst + cgst + igst));
+  }
+
+  function handleSgstChange(val: number) {
+    setSgst(val);
+    setCgst(val);
+    setTotal(round2(subtotal + val * 2 + igst));
+  }
+
+  function handleCgstChange(val: number) {
+    setCgst(val);
+    setSgst(val);
+    setTotal(round2(subtotal + val * 2 + igst));
+  }
+
+  function handleIgstChange(val: number) {
+    setIgst(val);
+    setTotal(round2(subtotal + sgst + cgst + val));
+  }
+
+  function handleTotalChange(val: number) {
+    setTotal(val);
+  }
+
   const lowConfidenceCount = useMemo(
     () => lineItems.filter((li) => (li.confidence ?? 1) < 0.7).length,
     [lineItems]
@@ -227,16 +255,16 @@ export function ReviewForm({
           toast.error(result.message);
           return;
         }
-      } catch (error) {
-        // redirect() throws a NEXT_REDIRECT error — ignore those
-        if (
-          error &&
-          typeof error === "object" &&
-          "digest" in error &&
-          String((error as { digest?: string }).digest).startsWith("NEXT_REDIRECT")
-        ) {
+
+        if (result && "ok" in result && result.ok && result.redirectUrl) {
+          const wasDraft =
+            invoice.status === "NEEDS_REVIEW" || invoice.status === "PROCESSING";
+          toast.success(wasDraft ? "Invoice confirmed and saved" : "Invoice updated");
+          router.push(result.redirectUrl);
+          router.refresh();
           return;
         }
+      } catch (error) {
         toast.error(
           error instanceof Error ? error.message : "Failed to confirm invoice"
         );
@@ -480,10 +508,13 @@ export function ReviewForm({
                   <Input
                     type="number"
                     step="any"
-                    placeholder="Qty"
-                    value={li.quantity}
+                    placeholder="0"
+                    value={li.quantity === 0 ? "" : li.quantity}
+                    onFocus={(e) => e.target.select()}
                     onChange={(e) =>
-                      updateLine(index, { quantity: Number(e.target.value) })
+                      updateLine(index, {
+                        quantity: e.target.value === "" ? 0 : Number(e.target.value),
+                      })
                     }
                   />
                   <Input
@@ -494,19 +525,25 @@ export function ReviewForm({
                   <Input
                     type="number"
                     step="any"
-                    placeholder="Rate"
-                    value={li.rateExclGst}
+                    placeholder="0.00"
+                    value={li.rateExclGst === 0 ? "" : li.rateExclGst}
+                    onFocus={(e) => e.target.select()}
                     onChange={(e) =>
-                      updateLine(index, { rateExclGst: Number(e.target.value) })
+                      updateLine(index, {
+                        rateExclGst: e.target.value === "" ? 0 : Number(e.target.value),
+                      })
                     }
                   />
                   <Input
                     type="number"
                     step="any"
-                    placeholder="GST %"
-                    value={li.gstPercent}
+                    placeholder="0"
+                    value={li.gstPercent === 0 ? "" : li.gstPercent}
+                    onFocus={(e) => e.target.select()}
                     onChange={(e) =>
-                      updateLine(index, { gstPercent: Number(e.target.value) })
+                      updateLine(index, {
+                        gstPercent: e.target.value === "" ? 0 : Number(e.target.value),
+                      })
                     }
                   />
                 </div>
@@ -560,14 +597,19 @@ export function ReviewForm({
                       <Input
                         type="number"
                         step="any"
-                        value={li.quantity}
+                        placeholder="0"
+                        value={li.quantity === 0 ? "" : li.quantity}
+                        onFocus={(e) => e.target.select()}
                         onChange={(e) =>
-                          updateLine(index, { quantity: Number(e.target.value) })
+                          updateLine(index, {
+                            quantity: e.target.value === "" ? 0 : Number(e.target.value),
+                          })
                         }
                       />
                     </td>
                     <td className="py-2 pr-2 w-24">
                       <Input
+                        placeholder="NOS"
                         value={li.unit}
                         onChange={(e) =>
                           updateLine(index, { unit: e.target.value })
@@ -578,10 +620,12 @@ export function ReviewForm({
                       <Input
                         type="number"
                         step="any"
-                        value={li.rateExclGst}
+                        placeholder="0.00"
+                        value={li.rateExclGst === 0 ? "" : li.rateExclGst}
+                        onFocus={(e) => e.target.select()}
                         onChange={(e) =>
                           updateLine(index, {
-                            rateExclGst: Number(e.target.value),
+                            rateExclGst: e.target.value === "" ? 0 : Number(e.target.value),
                           })
                         }
                       />
@@ -590,10 +634,12 @@ export function ReviewForm({
                       <Input
                         type="number"
                         step="any"
-                        value={li.gstPercent}
+                        placeholder="0"
+                        value={li.gstPercent === 0 ? "" : li.gstPercent}
+                        onFocus={(e) => e.target.select()}
                         onChange={(e) =>
                           updateLine(index, {
-                            gstPercent: Number(e.target.value),
+                            gstPercent: e.target.value === "" ? 0 : Number(e.target.value),
                           })
                         }
                       />
@@ -636,25 +682,77 @@ export function ReviewForm({
           <CardTitle>Totals</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-          {(
-            [
-              ["Subtotal", subtotal, setSubtotal],
-              ["SGST", sgst, setSgst],
-              ["CGST", cgst, setCgst],
-              ["IGST", igst, setIgst],
-              ["Total", total, setTotal],
-            ] as const
-          ).map(([label, value, setter]) => (
-            <div key={label} className="grid gap-2">
-              <Label>{label}</Label>
-              <Input
-                type="number"
-                step="any"
-                value={value}
-                onChange={(e) => setter(Number(e.target.value))}
-              />
+          <div className="grid gap-2">
+            <Label>Subtotal</Label>
+            <Input
+              type="number"
+              step="any"
+              placeholder="0.00"
+              value={subtotal === 0 ? "" : subtotal}
+              onFocus={(e) => e.target.select()}
+              onChange={(e) =>
+                handleSubtotalChange(e.target.value === "" ? 0 : Number(e.target.value))
+              }
+            />
+          </div>
+          <div className="grid gap-2">
+            <div className="flex items-center justify-between">
+              <Label>SGST</Label>
+              <span className="text-[10px] text-muted-foreground font-medium">(Auto-sync)</span>
             </div>
-          ))}
+            <Input
+              type="number"
+              step="any"
+              placeholder="0.00"
+              value={sgst === 0 ? "" : sgst}
+              onFocus={(e) => e.target.select()}
+              onChange={(e) =>
+                handleSgstChange(e.target.value === "" ? 0 : Number(e.target.value))
+              }
+            />
+          </div>
+          <div className="grid gap-2">
+            <div className="flex items-center justify-between">
+              <Label>CGST</Label>
+              <span className="text-[10px] text-muted-foreground font-medium">(Auto-sync)</span>
+            </div>
+            <Input
+              type="number"
+              step="any"
+              placeholder="0.00"
+              value={cgst === 0 ? "" : cgst}
+              onFocus={(e) => e.target.select()}
+              onChange={(e) =>
+                handleCgstChange(e.target.value === "" ? 0 : Number(e.target.value))
+              }
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label>IGST</Label>
+            <Input
+              type="number"
+              step="any"
+              placeholder="0.00"
+              value={igst === 0 ? "" : igst}
+              onFocus={(e) => e.target.select()}
+              onChange={(e) =>
+                handleIgstChange(e.target.value === "" ? 0 : Number(e.target.value))
+              }
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label>Total</Label>
+            <Input
+              type="number"
+              step="any"
+              placeholder="0.00"
+              value={total === 0 ? "" : total}
+              onFocus={(e) => e.target.select()}
+              onChange={(e) =>
+                handleTotalChange(e.target.value === "" ? 0 : Number(e.target.value))
+              }
+            />
+          </div>
         </CardContent>
       </Card>
 

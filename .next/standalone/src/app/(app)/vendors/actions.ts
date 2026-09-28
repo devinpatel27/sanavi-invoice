@@ -24,6 +24,13 @@ export async function createVendor(formData: FormData) {
     contact: formData.get("contact") || undefined,
   });
 
+  if (parsed.gstin) {
+    const existing = await db.vendor.findUnique({ where: { gstin: parsed.gstin } });
+    if (existing) {
+      throw new AppError("VALIDATION_001", `A vendor with GSTIN "${parsed.gstin}" already exists (${existing.name}).`);
+    }
+  }
+
   const created = await db.vendor.create({ data: parsed });
 
   await logActivity({
