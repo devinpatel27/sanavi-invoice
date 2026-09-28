@@ -1,6 +1,6 @@
 {
   "node": {
-    "409b18312428415675f1960bccc59b3eb7401884a3": {
+    "406a6958c3cf87c0e857760d4416e23e1774daf79e": {
       "workers": {
         "app/(app)/vendors/page": {
           "moduleId": 830896,
@@ -12,7 +12,7 @@
       "exportedName": "createVendor",
       "filename": "src/app/(app)/vendors/actions.ts"
     },
-    "40b398ae9f2b150ee8ada7112e29cf5e0b02459e28": {
+    "409659cf75676fd6a786a254ca840131b314bb25e4": {
       "workers": {
         "app/(app)/vendors/page": {
           "moduleId": 830896,

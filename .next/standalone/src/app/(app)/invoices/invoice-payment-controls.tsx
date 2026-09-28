@@ -83,36 +83,116 @@ export function InvoicePaymentControls({
   }
 
   return (
-    <div className={compact ? "flex flex-wrap items-center gap-1.5" : "flex flex-col gap-2"}>
-      {paidAmount > 0 && (
+    <div className={compact ? "flex items-center gap-1.5" : "flex flex-col gap-2"}>
+      {!compact && paidAmount > 0 && (
         <p className="text-xs text-muted-foreground">
           Paid {formatCurrency(paidAmount)} · Balance {formatCurrency(balance)}
         </p>
       )}
-      <div className="flex flex-wrap gap-1.5">
+      <div className="flex items-center gap-1.5">
         {canPay && (
           <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger render={<Button type="button" size="sm"><CreditCard className="size-3.5" />Add payment</Button>} />
+            <DialogTrigger
+              render={
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-8 gap-1 text-xs"
+                >
+                  <CreditCard className="size-3.5" />
+                  Pay
+                </Button>
+              }
+            />
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>Record payment</DialogTitle>
-                <DialogDescription>{invoiceNumber} · {vendorName} · Balance {formatCurrency(balance)}</DialogDescription>
+                <DialogDescription>
+                  {invoiceNumber} · {vendorName} · Balance {formatCurrency(balance)}
+                </DialogDescription>
               </DialogHeader>
               <div className="grid gap-4 py-2 sm:grid-cols-2">
-                <div className="grid gap-2"><Label htmlFor={`amount-${invoiceId}`}>Amount</Label><Input id={`amount-${invoiceId}`} type="number" min="0.01" max={balance} step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} /></div>
-                <div className="grid gap-2"><Label htmlFor={`date-${invoiceId}`}>Payment date</Label><Input id={`date-${invoiceId}`} type="date" value={paidOn} onChange={(e) => setPaidOn(e.target.value)} /></div>
-                <div className="grid gap-2"><Label htmlFor={`mode-${invoiceId}`}>Mode</Label><Input id={`mode-${invoiceId}`} placeholder="NEFT, UPI, cheque…" value={mode} onChange={(e) => setMode(e.target.value)} /></div>
-                <div className="grid gap-2"><Label htmlFor={`ref-${invoiceId}`}>Reference</Label><Input id={`ref-${invoiceId}`} placeholder="UTR / cheque number" value={reference} onChange={(e) => setReference(e.target.value)} /></div>
-                <div className="grid gap-2 sm:col-span-2"><Label htmlFor={`notes-${invoiceId}`}>Notes</Label><Input id={`notes-${invoiceId}`} placeholder="Optional payment notes" value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
+                <div className="grid gap-2">
+                  <Label htmlFor={`amount-${invoiceId}`}>Amount</Label>
+                  <Input
+                    id={`amount-${invoiceId}`}
+                    type="number"
+                    min="0.01"
+                    max={balance}
+                    step="0.01"
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor={`date-${invoiceId}`}>Payment date</Label>
+                  <Input
+                    id={`date-${invoiceId}`}
+                    type="date"
+                    value={paidOn}
+                    onChange={(e) => setPaidOn(e.target.value)}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor={`mode-${invoiceId}`}>Mode</Label>
+                  <Input
+                    id={`mode-${invoiceId}`}
+                    placeholder="NEFT, UPI, cheque…"
+                    value={mode}
+                    onChange={(e) => setMode(e.target.value)}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor={`ref-${invoiceId}`}>Reference</Label>
+                  <Input
+                    id={`ref-${invoiceId}`}
+                    placeholder="UTR / cheque number"
+                    value={reference}
+                    onChange={(e) => setReference(e.target.value)}
+                  />
+                </div>
+                <div className="grid gap-2 sm:col-span-2">
+                  <Label htmlFor={`notes-${invoiceId}`}>Notes</Label>
+                  <Input
+                    id={`notes-${invoiceId}`}
+                    placeholder="Optional payment notes"
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                  />
+                </div>
               </div>
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-                <Button type="button" disabled={pending || !paidOn || Number(amount) <= 0 || Number(amount) > balance + 0.01} onClick={submitPayment}>{pending && <Loader2 className="size-4 animate-spin" />}Save payment</Button>
+                <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  disabled={
+                    pending ||
+                    !paidOn ||
+                    Number(amount) <= 0 ||
+                    Number(amount) > balance + 0.01
+                  }
+                  onClick={submitPayment}
+                >
+                  {pending && <Loader2 className="size-4 animate-spin" />}
+                  Save payment
+                </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
         )}
-        <Button type="button" size="sm" variant="ghost" className="gap-1" onClick={handlePrint}><Printer className="size-3.5" />Print</Button>
+        <Button
+          type="button"
+          size="icon-sm"
+          variant="ghost"
+          className="size-8 text-muted-foreground hover:text-foreground"
+          onClick={handlePrint}
+          title="Print invoice"
+        >
+          <Printer className="size-3.5" />
+        </Button>
       </div>
     </div>
   );

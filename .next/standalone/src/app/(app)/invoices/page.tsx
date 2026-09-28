@@ -297,62 +297,85 @@ export default async function InvoicesPage({
                       <TableHead>Status</TableHead>
                       <TableHead>Paid at</TableHead>
                       <TableHead>File</TableHead>
-                      <TableHead />
+                      <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {invoices.map((invoice) => (
-                      <TableRow
-                        key={invoice.id}
-                        className="transition-colors hover:bg-muted/40"
-                      >
-                        <TableCell className="font-medium">
-                          {invoice.invoiceNumber}
-                        </TableCell>
-                        <TableCell>{invoice.vendor.name}</TableCell>
-                        <TableCell>{invoice.project.name}</TableCell>
-                        <TableCell>
-                          {invoice.category?.name ?? "—"}
-                        </TableCell>
-                        <TableCell>
-                          {invoice.invoiceDate.toLocaleDateString("en-IN")}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {formatCurrency(Number(invoice.total))}
-                        </TableCell>
-                        <TableCell>
-                          <Badge
-                            variant={
-                              STATUS_VARIANT[invoice.status] ?? "outline"
-                            }
-                          >
-                            {invoice.status.replace("_", " ")}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                          {invoice.paidAt
-                            ? invoice.paidAt.toLocaleString("en-IN", {
-                                day: "2-digit",
-                                month: "short",
-                                year: "numeric",
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })
-                            : "—"}
-                        </TableCell>
-                        <TableCell>
-                          <InvoiceFilePreview
-                            invoiceId={invoice.id}
-                            fileUrl={invoice.fileUrl}
-                            compact
-                          />
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex flex-col items-end gap-2">
-                            <div className="flex items-center gap-1.5">
+                    {invoices.map((invoice) => {
+                      const paidAmount = invoice.payments.reduce(
+                        (sum, payment) => sum + Number(payment.amount),
+                        0
+                      );
+                      const balance = Math.max(0, Number(invoice.total) - paidAmount);
+                      return (
+                        <TableRow
+                          key={invoice.id}
+                          className="transition-colors hover:bg-muted/40"
+                        >
+                          <TableCell className="font-medium">
+                            <Link
+                              href={`/invoices/${invoice.id}/review`}
+                              className="hover:underline font-semibold"
+                            >
+                              {invoice.invoiceNumber}
+                            </Link>
+                          </TableCell>
+                          <TableCell>{invoice.vendor.name}</TableCell>
+                          <TableCell>{invoice.project.name}</TableCell>
+                          <TableCell>
+                            {invoice.category?.name ?? "—"}
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap">
+                            {invoice.invoiceDate.toLocaleDateString("en-IN")}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="font-medium">
+                              {formatCurrency(Number(invoice.total))}
+                            </div>
+                            {paidAmount > 0 && balance > 0 && (
+                              <div className="text-[11px] text-muted-foreground">
+                                Bal: {formatCurrency(balance)}
+                              </div>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              variant={
+                                STATUS_VARIANT[invoice.status] ?? "outline"
+                              }
+                            >
+                              {invoice.status.replace("_", " ")}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                            {invoice.paidAt
+                              ? invoice.paidAt.toLocaleString("en-IN", {
+                                  day: "2-digit",
+                                  month: "short",
+                                  year: "numeric",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })
+                              : "—"}
+                          </TableCell>
+                          <TableCell>
+                            <InvoiceFilePreview
+                              invoiceId={invoice.id}
+                              fileUrl={invoice.fileUrl}
+                              compact
+                            />
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-1.5 whitespace-nowrap">
                               <Button
                                 size="sm"
-                                variant="outline"
+                                variant={
+                                  invoice.status === "NEEDS_REVIEW" ||
+                                  invoice.status === "PROCESSING"
+                                    ? "default"
+                                    : "outline"
+                                }
+                                className="h-8 px-2.5 text-xs"
                                 nativeButton={false}
                                 render={
                                   <Link href={`/invoices/${invoice.id}/review`} />
@@ -363,32 +386,30 @@ export default async function InvoicesPage({
                                   ? "Review"
                                   : "Edit"}
                               </Button>
+                              <InvoicePaymentControls
+                                invoiceId={invoice.id}
+                                status={invoice.status}
+                                paidAt={invoice.paidAt?.toISOString() ?? null}
+                                invoiceNumber={invoice.invoiceNumber}
+                                vendorName={invoice.vendor.name}
+                                categoryName={invoice.category?.name ?? null}
+                                total={Number(invoice.total)}
+                                paidAmount={paidAmount}
+                                compact
+                              />
                               {(!isStaff || invoice.uploadedById === session.user.id) && (
                                 <InvoiceDeleteButton
                                   invoiceId={invoice.id}
                                   invoiceNumber={invoice.invoiceNumber}
                                   vendorName={invoice.vendor.name}
+                                  className="h-8 w-8"
                                 />
                               )}
                             </div>
-                            <InvoicePaymentControls
-                              invoiceId={invoice.id}
-                              status={invoice.status}
-                              paidAt={invoice.paidAt?.toISOString() ?? null}
-                              invoiceNumber={invoice.invoiceNumber}
-                              vendorName={invoice.vendor.name}
-                              categoryName={invoice.category?.name ?? null}
-                              total={Number(invoice.total)}
-                              paidAmount={invoice.payments.reduce(
-                                (sum, payment) => sum + Number(payment.amount),
-                                0
-                              )}
-                              compact
-                            />
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </div>
