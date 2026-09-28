@@ -185,10 +185,11 @@ export async function deleteInvoice(invoiceId: string) {
   if (!invoice) throw new AppError("NOT_FOUND_001", "Invoice not found");
 
   if (user.role !== "ADMIN") {
-    if (
-      invoice.uploadedById !== user.id ||
-      (invoice.status !== "NEEDS_REVIEW" && invoice.status !== "PROCESSING")
-    ) {
+    const isUploader = invoice.uploadedById === user.id;
+    const assignment = await db.projectAssignment.findFirst({
+      where: { userId: user.id, projectId: invoice.projectId },
+    });
+    if (!isUploader && !assignment) {
       throw new AppError(
         "PERMISSION_001",
         "You do not have permission to delete this invoice"
@@ -196,8 +197,11 @@ export async function deleteInvoice(invoiceId: string) {
     }
   }
 
-  await db.invoice.delete({
-    where: { id: invoiceId },
+  await db.$transaction(async (tx) => {
+    await tx.auditLog.deleteMany({ where: { invoiceId } });
+    await tx.payment.deleteMany({ where: { invoiceId } });
+    await tx.invoiceLineItem.deleteMany({ where: { invoiceId } });
+    await tx.invoice.delete({ where: { id: invoiceId } });
   });
 
   await logActivity({
@@ -214,4 +218,6 @@ export async function deleteInvoice(invoiceId: string) {
   revalidatePath("/materials");
   revalidatePath("/projects");
   revalidatePath(`/projects/${invoice.projectId}`);
+
+  return { ok: true as const };
 }
