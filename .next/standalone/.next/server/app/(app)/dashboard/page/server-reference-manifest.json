@@ -1,4 +1,17 @@
 {
-  "node": {},
+  "node": {
+    "40ed7d03cabe3b6f255fcdd4562fb5e1771780682b": {
+      "workers": {
+        "app/(app)/dashboard/page": {
+          "moduleId": 538254,
+          "async": true,
+          "exportedName": "default",
+          "filename": "src/app/(app)/dashboard/page.tsx"
+        }
+      },
+      "exportedName": "default",
+      "filename": "src/app/(app)/dashboard/page.tsx"
+    }
+  },
   "edge": {}
 }

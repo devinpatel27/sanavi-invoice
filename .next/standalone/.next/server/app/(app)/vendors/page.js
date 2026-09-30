@@ -15,7 +15,7 @@ R.c("server/chunks/ssr/[root-of-the-server]__1sy9zkz._.js")
 R.c("server/chunks/ssr/[root-of-the-server]__0brbyn2._.js")
 R.c("server/chunks/ssr/_1rt422o._.js")
 R.c("server/chunks/ssr/_1u5md4x._.js")
-R.c("server/chunks/ssr/_1ijilu-._.js")
+R.c("server/chunks/ssr/_0xapf2e._.js")
 R.c("server/chunks/ssr/node_modules_next_16u4zyx._.js")
 R.m(114437)
 module.exports=R.m(114437).exports

@@ -1,4 +1,5 @@
-import { Suspense } from "react";
+"use server";
+
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { auth } from "@/lib/auth";
@@ -14,14 +15,14 @@ import {
   type RecentInvoice,
 } from "@/components/dashboard-view";
 
-function buildMonthBuckets(now: Date): MonthSpendPoint[] {
+function buildMonthBuckets(anchorDate: Date, count = 12): MonthSpendPoint[] {
   const points: MonthSpendPoint[] = [];
-  for (let i = 11; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+  for (let i = count - 1; i >= 0; i--) {
+    const d = new Date(anchorDate.getFullYear(), anchorDate.getMonth() - i, 1);
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
     points.push({
       month: key,
-      label: d.toLocaleString("en-IN", { month: "short" }),
+      label: d.toLocaleString("en-IN", { month: "short", year: "2-digit" }),
       total: 0,
       paid: 0,
     });
@@ -57,7 +58,6 @@ export default async function DashboardPage({
     : {};
 
   const now = new Date();
-  const trendStart = new Date(now.getFullYear(), now.getMonth() - 11, 1);
 
   const from = params.from ? new Date(params.from) : undefined;
   let to: Date | undefined;
@@ -85,175 +85,133 @@ export default async function DashboardPage({
     if (to) paymentDateFilter.paidOn = { ...paymentDateFilter.paidOn, lte: to };
   }
 
-  const [
-    revenueAgg,
-    paidAgg,
-    unpaidCount,
-    overdueCount,
-    projectsCount,
-    vendorsCount,
-    categoryBreakdown,
-    trendInvoices,
-    allCategories,
-    reportInvoices,
-    recentInvoices,
-    projectBreakdown,
-  ] = await Promise.all([
-    db.invoice.aggregate({
-      where: { ...confirmed, ...projectFilter, ...categoryFilter, ...dateFilter },
-      _sum: { total: true },
-    }),
-    db.payment.aggregate({
-      where: {
-        ...paymentDateFilter,
-        invoice: { is: { ...confirmed, ...projectFilter, ...categoryFilter } },
-      },
-      _sum: { amount: true },
-    }),
-    db.invoice.count({
-      where: {
-        status: { in: ["UNPAID", "PARTIALLY_PAID"] },
-        ...projectFilter,
-        ...categoryFilter,
-        ...dateFilter,
-      },
-    }),
-    db.invoice.count({
-      where: { status: "OVERDUE", ...projectFilter, ...categoryFilter, ...dateFilter },
-    }),
-    projectScope.selectedProjectId
-      ? Promise.resolve(1)
-      : db.project.count(),
-    db.vendor.count({
-      where: { invoices: { some: { ...confirmed, ...projectFilter, ...dateFilter } } },
-    }),
-    db.invoice.groupBy({
-      by: ["categoryId"],
-      where: { ...confirmed, ...projectFilter, ...dateFilter },
-      _sum: { total: true },
-      _count: true,
-    }),
-    db.invoice.findMany({
-      where: { invoiceDate: { gte: trendStart }, ...confirmed, ...projectFilter, ...categoryFilter },
-      select: { invoiceDate: true, total: true, payments: { select: { amount: true } } },
-    }),
+  // Streamlined fast queries: fetch report invoices with joins and categories in parallel
+  const [allCategories, reportInvoices, projectsCount] = await Promise.all([
     db.category.findMany({
       orderBy: { name: "asc" },
       select: { id: true, name: true },
     }),
     db.invoice.findMany({
       where: { ...confirmed, ...projectFilter, ...categoryFilter, ...dateFilter },
-      select: {
-        id: true,
-        invoiceNumber: true,
-        total: true,
-        status: true,
-        invoiceDate: true,
-        vendor: { select: { name: true } },
-        project: { select: { name: true } },
-        payments: { select: { amount: true } },
+      include: {
+        vendor: { select: { id: true, name: true } },
+        project: { select: { id: true, name: true } },
+        category: { select: { id: true, name: true } },
+        payments: {
+          select: { amount: true, paidOn: true },
+          ...(from || to ? { where: paymentDateFilter } : {}),
+        },
       },
-    }),
-    db.invoice.findMany({
-      where: { ...confirmed, ...projectFilter, ...categoryFilter, ...dateFilter },
       orderBy: { invoiceDate: "desc" },
-      take: 8,
-      select: {
-        id: true,
-        invoiceNumber: true,
-        total: true,
-        status: true,
-        invoiceDate: true,
-        vendor: { select: { name: true } },
-      },
     }),
-    db.invoice.groupBy({
-      by: ["projectId"],
-      where: { ...confirmed, ...projectFilter, ...categoryFilter, ...dateFilter },
-      _sum: { total: true },
-      _count: true,
-    }),
+    projectScope.selectedProjectId ? Promise.resolve(1) : db.project.count(),
   ]);
 
-  const categoryIds = categoryBreakdown
-    .map((row) => row.categoryId)
-    .filter((id): id is string => Boolean(id));
-  const categoriesForNames = await db.category.findMany({
-    where: { id: { in: categoryIds } },
-  });
-  const categoryNameById = new Map(categoriesForNames.map((c) => [c.id, c.name]));
+  let revenue = 0;
+  let paid = 0;
+  let unpaidCount = 0;
+  let overdueCount = 0;
+  let outstandingTotal = 0;
+  const vendorSet = new Set<string>();
+  const categoryMap = new Map<string, CategorySpendPoint>();
+  const projectMap = new Map<string, ProjectSpendPoint>();
+  const vendorMap = new Map<string, VendorSpendPoint>();
+  const statusMap = new Map<string, StatusPoint>();
 
-  const projectIds = projectBreakdown
-    .map((row) => row.projectId)
-    .filter((id): id is string => Boolean(id));
-  const projectsForNames = projectIds.length
-    ? await db.project.findMany({ where: { id: { in: projectIds } } })
-    : [];
-  const projectNameById = new Map(projectsForNames.map((p) => [p.id, p.name]));
+  for (const inv of reportInvoices) {
+    const invTotal = Number(inv.total);
+    const invPaid = inv.payments.reduce((s, p) => s + Number(p.amount), 0);
+    revenue += invTotal;
+    paid += invPaid;
+    const invBalance = Math.max(0, invTotal - invPaid);
+    outstandingTotal += invBalance;
 
-  const monthlySpend = buildMonthBuckets(now);
+    if (inv.status === "UNPAID" || inv.status === "PARTIALLY_PAID") {
+      unpaidCount++;
+    } else if (inv.status === "OVERDUE") {
+      overdueCount++;
+    }
+
+    if (inv.vendor?.name) {
+      vendorSet.add(inv.vendor.id || inv.vendor.name);
+      const vm = vendorMap.get(inv.vendor.name) ?? {
+        name: inv.vendor.name,
+        total: 0,
+        count: 0,
+      };
+      vm.total += invTotal;
+      vm.count++;
+      vendorMap.set(inv.vendor.name, vm);
+    }
+
+    const catKey = inv.categoryId ?? "UNCATEGORIZED";
+    const catName = inv.category?.name ?? "Uncategorized";
+    const cm = categoryMap.get(catKey) ?? {
+      id: inv.categoryId,
+      name: catName,
+      total: 0,
+      count: 0,
+    };
+    cm.total += invTotal;
+    cm.count++;
+    categoryMap.set(catKey, cm);
+
+    const projKey = inv.projectId ?? "UNASSIGNED";
+    const projName = inv.project?.name ?? "Unassigned";
+    const pm = projectMap.get(projKey) ?? {
+      id: inv.projectId,
+      name: projName,
+      total: 0,
+      count: 0,
+    };
+    pm.total += invTotal;
+    pm.count++;
+    projectMap.set(projKey, pm);
+
+    const statusLabel = inv.status.replaceAll("_", " ");
+    const sm = statusMap.get(statusLabel) ?? {
+      name: statusLabel,
+      value: 0,
+      count: 0,
+    };
+    sm.value += invTotal;
+    sm.count++;
+    statusMap.set(statusLabel, sm);
+  }
+
+  // Anchor date for Spend Trend:
+  // If user provided a 'to' filter, use that.
+  // Otherwise, if confirmed invoices exist and latest is > 6 months ago (e.g. 2024), anchor to that latest date!
+  let anchorDate = now;
+  if (to) {
+    anchorDate = to;
+  } else if (reportInvoices.length > 0) {
+    const latestInvoiceDate = reportInvoices[0].invoiceDate;
+    if (now.getTime() - latestInvoiceDate.getTime() > 180 * 24 * 60 * 60 * 1000) {
+      anchorDate = latestInvoiceDate;
+    }
+  }
+
+  const monthlySpend = buildMonthBuckets(anchorDate, 12);
   const monthIndex = new Map(monthlySpend.map((p, i) => [p.month, i]));
-  for (const inv of trendInvoices) {
+
+  for (const inv of reportInvoices) {
     const d = inv.invoiceDate;
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
     const idx = monthIndex.get(key);
     if (idx != null) {
       monthlySpend[idx].total += Number(inv.total);
-      const paid = inv.payments.reduce((s, p) => s + Number(p.amount), 0);
-      monthlySpend[idx].paid += paid;
+      const invPaid = inv.payments.reduce((s, p) => s + Number(p.amount), 0);
+      monthlySpend[idx].paid += invPaid;
     }
   }
 
-  const categorySpend: CategorySpendPoint[] = categoryBreakdown
-    .map((row) => ({
-      id: row.categoryId,
-      name: row.categoryId
-        ? categoryNameById.get(row.categoryId) ?? "Unknown"
-        : "Uncategorized",
-      total: Number(row._sum.total ?? 0),
-      count: row._count,
-    }))
-    .sort((a, b) => b.total - a.total);
-
-  const projectSpend: ProjectSpendPoint[] = projectBreakdown
-    .map((row) => ({
-      id: row.projectId,
-      name: row.projectId
-        ? projectNameById.get(row.projectId) ?? "Unknown"
-        : "Unassigned",
-      total: Number(row._sum.total ?? 0),
-      count: row._count,
-    }))
-    .sort((a, b) => b.total - a.total);
-
-  let outstandingTotal = 0;
-  const statusMap = new Map<string, StatusPoint>();
-  const vendorMap = new Map<string, VendorSpendPoint>();
-  for (const invoice of reportInvoices) {
-    const total = Number(invoice.total);
-    const paid = invoice.payments.reduce((s, p) => s + Number(p.amount), 0);
-    outstandingTotal += Math.max(0, total - paid);
-
-    const status = invoice.status.replaceAll("_", " ");
-    const statusRow = statusMap.get(status) ?? { name: status, value: 0, count: 0 };
-    statusRow.value += total;
-    statusRow.count += 1;
-    statusMap.set(status, statusRow);
-
-    const vendorName = invoice.vendor.name;
-    const vendorRow = vendorMap.get(vendorName) ?? {
-      name: vendorName,
-      total: 0,
-      count: 0,
-    };
-    vendorRow.total += total;
-    vendorRow.count += 1;
-    vendorMap.set(vendorName, vendorRow);
-  }
+  const categorySpend = [...categoryMap.values()].sort((a, b) => b.total - a.total);
+  const projectSpend = [...projectMap.values()].sort((a, b) => b.total - a.total);
   const statusBreakdown = [...statusMap.values()].sort((a, b) => b.value - a.value);
   const vendorSpend = [...vendorMap.values()].sort((a, b) => b.total - a.total).slice(0, 8);
 
-  const recentInvoicesMapped: RecentInvoice[] = recentInvoices.map((inv) => ({
+  const recentInvoicesMapped: RecentInvoice[] = reportInvoices.slice(0, 8).map((inv) => ({
     id: inv.id,
     invoiceNumber: inv.invoiceNumber,
     vendorName: inv.vendor.name,
@@ -262,9 +220,8 @@ export default async function DashboardPage({
     invoiceDate: inv.invoiceDate.toISOString(),
   }));
 
-  const revenue = Number(revenueAgg._sum.total ?? 0);
-  const paid = Number(paidAgg._sum.amount ?? 0);
   const pending = Math.max(0, outstandingTotal);
+  const clientsCount = vendorSet.size;
   const selectedProject = projectScope.projects.find(
     (project) => project.id === projectScope.selectedProjectId
   );
@@ -274,35 +231,31 @@ export default async function DashboardPage({
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          {`${
-            selectedProject
-              ? `${selectedProject.name} purchase invoices and spend`
-              : "Overview of all project purchase invoices and spend"
-          }${selectedCategoryId ? " · filtered by category" : ""}.`}
+          {selectedProject
+            ? `${selectedProject.name} purchase invoices and spend.`
+            : "Overview of construction purchase invoices and spend across all projects."}
         </p>
       </div>
 
-      <Suspense fallback={null}>
-        <DashboardView
-          revenue={revenue}
-          paid={paid}
-          pending={pending}
-          unpaidCount={unpaidCount}
-          overdueCount={overdueCount}
-          projectsCount={projectsCount}
-          clientsCount={vendorsCount}
-          monthlySpend={monthlySpend}
-          categorySpend={categorySpend}
-          statusBreakdown={statusBreakdown}
-          vendorSpend={vendorSpend}
-          projectSpend={projectSpend}
-          recentInvoices={recentInvoicesMapped}
-          categories={allCategories}
-          selectedCategoryId={selectedCategoryId}
-          from={params.from ?? ""}
-          to={params.to ?? ""}
-        />
-      </Suspense>
+      <DashboardView
+        revenue={revenue}
+        paid={paid}
+        pending={pending}
+        unpaidCount={unpaidCount}
+        overdueCount={overdueCount}
+        projectsCount={projectsCount}
+        clientsCount={clientsCount}
+        monthlySpend={monthlySpend}
+        categorySpend={categorySpend}
+        statusBreakdown={statusBreakdown}
+        vendorSpend={vendorSpend}
+        projectSpend={projectSpend}
+        recentInvoices={recentInvoicesMapped}
+        categories={allCategories}
+        selectedCategoryId={selectedCategoryId}
+        from={params.from ?? ""}
+        to={params.to ?? ""}
+      />
     </div>
   );
 }
