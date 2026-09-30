@@ -9,6 +9,7 @@ import {
   DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/label";
 import { recordInvoicePayment } from "./actions";
 
@@ -127,11 +128,11 @@ export function InvoicePaymentControls({
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor={`date-${invoiceId}`}>Payment date</Label>
-                  <Input
+                  <DatePicker
                     id={`date-${invoiceId}`}
-                    type="date"
                     value={paidOn}
-                    onChange={(e) => setPaidOn(e.target.value)}
+                    onChange={setPaidOn}
+                    placeholder="Select payment date"
                   />
                 </div>
                 <div className="grid gap-2">

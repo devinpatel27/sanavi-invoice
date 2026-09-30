@@ -39,6 +39,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -260,20 +261,18 @@ export function DashboardView({
         <div className={`${filtersOpen ? "grid" : "hidden"} gap-3 border-t pt-3 sm:grid-cols-2 md:grid md:border-0 md:pt-0 lg:grid-cols-4 lg:items-end`}>
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs text-muted-foreground">From</Label>
-            <Input
-              type="date"
+            <DatePicker
               value={fromVal}
-              onChange={(e) => setFromVal(e.target.value)}
-              className="h-10 rounded-xl text-sm"
+              onChange={setFromVal}
+              placeholder="From date"
             />
           </div>
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs text-muted-foreground">To</Label>
-            <Input
-              type="date"
+            <DatePicker
               value={toVal}
-              onChange={(e) => setToVal(e.target.value)}
-              className="h-10 rounded-xl text-sm"
+              onChange={setToVal}
+              placeholder="To date"
             />
           </div>
           <div className="flex flex-col gap-1.5">
