@@ -19,6 +19,7 @@ import {
   RotateCcw,
   Search,
   SlidersHorizontal,
+  Loader2,
   X,
 } from "lucide-react";
 
@@ -104,7 +105,7 @@ export function InvoiceFilters({
   }
 
   // Quick preset helper for dates
-  function applyDatePreset(type: "this_month" | "last_30_days" | "this_year") {
+  function applyDatePreset(type: "this_month" | "last_month" | "last_30_days" | "this_year") {
     const now = new Date();
     let newFrom = "";
     let newTo = "";
@@ -116,6 +117,11 @@ export function InvoiceFilters({
     if (type === "this_month") {
       const start = new Date(now.getFullYear(), now.getMonth(), 1);
       const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      newFrom = fmt(start);
+      newTo = fmt(end);
+    } else if (type === "last_month") {
+      const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const end = new Date(now.getFullYear(), now.getMonth(), 0);
       newFrom = fmt(start);
       newTo = fmt(end);
     } else if (type === "last_30_days") {
@@ -207,7 +213,14 @@ export function InvoiceFilters({
             disabled={pending}
             className="h-10 rounded-xl px-4 text-xs font-semibold"
           >
-            Apply
+            {pending ? (
+              <span className="flex items-center gap-1.5">
+                <Loader2 className="size-3.5 animate-spin" />
+                Applying…
+              </span>
+            ) : (
+              "Apply"
+            )}
           </Button>
 
           {/* Clear Button if active */}
@@ -391,6 +404,15 @@ export function InvoiceFilters({
                 className="h-10 rounded-xl px-3 text-xs font-medium"
               >
                 This Month
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => applyDatePreset("last_month")}
+                className="h-10 rounded-xl px-3 text-xs font-medium"
+              >
+                Last Month
               </Button>
               <Button
                 type="button"

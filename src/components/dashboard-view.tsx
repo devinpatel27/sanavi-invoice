@@ -27,6 +27,7 @@ import {
   SlidersHorizontal,
   ChevronDown,
   TrendingUp,
+  Loader2,
 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
@@ -183,6 +184,30 @@ export function DashboardView({
     applyFilters({ from: fromDate, to: toDate });
   }
 
+  function applyThisMonth() {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), 1);
+    const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const fromDate = `${start.getFullYear()}-${pad(start.getMonth() + 1)}-01`;
+    const toDate = `${end.getFullYear()}-${pad(end.getMonth() + 1)}-${pad(end.getDate())}`;
+    setFromVal(fromDate);
+    setToVal(toDate);
+    applyFilters({ from: fromDate, to: toDate });
+  }
+
+  function applyLastMonth() {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const end = new Date(now.getFullYear(), now.getMonth(), 0);
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const fromDate = `${start.getFullYear()}-${pad(start.getMonth() + 1)}-01`;
+    const toDate = `${end.getFullYear()}-${pad(end.getMonth() + 1)}-${pad(end.getDate())}`;
+    setFromVal(fromDate);
+    setToVal(toDate);
+    applyFilters({ from: fromDate, to: toDate });
+  }
+
   function clearDates() {
     setFromVal("");
     setToVal("");
@@ -276,20 +301,63 @@ export function DashboardView({
             <Button
               type="button"
               size="sm"
-              className="h-10 rounded-xl px-3 text-xs"
+              className="h-10 rounded-xl px-3.5 text-xs font-semibold"
               disabled={pendingTransition}
               onClick={() => applyFilters()}
             >
-              Apply
+              {pendingTransition ? (
+                <span className="flex items-center gap-1.5">
+                  <Loader2 className="size-3.5 animate-spin" />
+                  Applying…
+                </span>
+              ) : (
+                "Apply"
+              )}
             </Button>
-            <Button type="button" size="sm" variant="outline" className="h-10 rounded-xl px-3 text-xs" onClick={() => applyPreset(30)}>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-10 rounded-xl px-3 text-xs"
+              onClick={applyThisMonth}
+            >
+              This Month
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-10 rounded-xl px-3 text-xs"
+              onClick={applyLastMonth}
+            >
+              Last Month
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-10 rounded-xl px-3 text-xs"
+              onClick={() => applyPreset(30)}
+            >
               30 days
             </Button>
-            <Button type="button" size="sm" variant="outline" className="h-10 rounded-xl px-3 text-xs" onClick={() => applyPreset(365)}>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-10 rounded-xl px-3 text-xs"
+              onClick={() => applyPreset(365)}
+            >
               12 months
             </Button>
             {(fromVal || toVal) && (
-              <Button type="button" size="sm" variant="ghost" className="h-10 rounded-xl px-2.5 text-xs" onClick={clearDates}>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="h-10 rounded-xl px-2.5 text-xs text-muted-foreground hover:text-foreground"
+                onClick={clearDates}
+              >
                 Clear
               </Button>
             )}
@@ -347,7 +415,7 @@ export function DashboardView({
                         <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={11} tickMargin={8} />
                         <YAxis tickLine={false} axisLine={false} fontSize={11} width={56} tickFormatter={(v) => (v >= 100000 ? `${(v / 100000).toFixed(1)}L` : v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v))} />
                         <Tooltip formatter={(value) => [formatInr(Number(value ?? 0)), "Spend"]} contentStyle={{ borderRadius: 8, border: "1px solid var(--border)", background: "var(--card)", fontSize: 12 }} />
-                        <Area type="monotone" dataKey="total" stroke="var(--foreground)" strokeWidth={2} fill="url(#spendFill)" animationDuration={700} />
+                        <Area type="monotone" dataKey="total" stroke="var(--foreground)" strokeWidth={2} fill="url(#spendFill)" dot={{ r: 3, fill: "var(--foreground)" }} activeDot={{ r: 5 }} animationDuration={500} />
                       </AreaChart>
                     </ResponsiveContainer>
                   </div>
