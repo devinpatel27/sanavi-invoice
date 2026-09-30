@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { AlertTriangle, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -401,20 +402,20 @@ export function ReviewForm({
           </div>
           <div className="grid gap-2">
             <Label htmlFor="invoiceDate">Invoice date</Label>
-            <Input
+            <DatePicker
               id="invoiceDate"
-              type="date"
               value={invoiceDate}
-              onChange={(e) => setInvoiceDate(e.target.value)}
+              onChange={setInvoiceDate}
+              placeholder="Select invoice date"
             />
           </div>
           <div className="grid gap-2">
             <Label htmlFor="dueDate">Due date</Label>
-            <Input
+            <DatePicker
               id="dueDate"
-              type="date"
               value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
+              onChange={setDueDate}
+              placeholder="Select due date (optional)"
             />
           </div>
 

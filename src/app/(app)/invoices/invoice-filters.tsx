@@ -4,6 +4,7 @@ import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useCallback, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -337,28 +338,15 @@ export function InvoiceFilters({
             <Label htmlFor="from" className="text-muted-foreground text-xs font-medium">
               Invoice Date From
             </Label>
-            <div className="relative">
-              <Calendar className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" />
-              <Input
-                id="from"
-                type="date"
-                value={from}
-                onChange={(e) => setFrom(e.target.value)}
-                className="h-10 w-full rounded-xl pl-9 text-sm"
-              />
-              {from && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setFrom("");
-                    apply({ from: "" });
-                  }}
-                  className="text-muted-foreground hover:text-foreground absolute top-1/2 right-2.5 -translate-y-1/2 rounded-full p-1"
-                >
-                  <X className="size-3" />
-                </button>
-              )}
-            </div>
+            <DatePicker
+              id="from"
+              value={from}
+              onChange={(val) => {
+                setFrom(val);
+                apply({ from: val });
+              }}
+              placeholder="From date"
+            />
           </div>
 
           {/* Date To */}
@@ -366,28 +354,15 @@ export function InvoiceFilters({
             <Label htmlFor="to" className="text-muted-foreground text-xs font-medium">
               Invoice Date To
             </Label>
-            <div className="relative">
-              <Calendar className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" />
-              <Input
-                id="to"
-                type="date"
-                value={to}
-                onChange={(e) => setTo(e.target.value)}
-                className="h-10 w-full rounded-xl pl-9 text-sm"
-              />
-              {to && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setTo("");
-                    apply({ to: "" });
-                  }}
-                  className="text-muted-foreground hover:text-foreground absolute top-1/2 right-2.5 -translate-y-1/2 rounded-full p-1"
-                >
-                  <X className="size-3" />
-                </button>
-              )}
-            </div>
+            <DatePicker
+              id="to"
+              value={to}
+              onChange={(val) => {
+                setTo(val);
+                apply({ to: val });
+              }}
+              placeholder="To date"
+            />
           </div>
 
           {/* Date Presets */}
