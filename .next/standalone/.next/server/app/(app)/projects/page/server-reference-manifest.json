@@ -1,6 +1,6 @@
 {
   "node": {
-    "40a781c956514aed838b90069baaf57df71f9c196e": {
+    "401410a4f418b5333a461641bc0a5d8fb58d8f21f7": {
       "workers": {
         "app/(app)/projects/page": {
           "moduleId": 764303,
@@ -12,7 +12,7 @@
       "exportedName": "createProject",
       "filename": "src/app/(app)/projects/actions.ts"
     },
-    "409a7181d2bac1a9dfe362e5ae2203a13b26564a16": {
+    "4050504ea65c809bf30088de139e57383fe9c760d9": {
       "workers": {
         "app/(app)/projects/page": {
           "moduleId": 764303,
@@ -24,7 +24,7 @@
       "exportedName": "updateProject",
       "filename": "src/app/(app)/projects/actions.ts"
     },
-    "40e09251d2c0222ced06a685f6ece58cb87612e30e": {
+    "4068cd25c08599f69421bbb8d0cdbcc1e9a8e13475": {
       "workers": {
         "app/(app)/projects/page": {
           "moduleId": 764303,

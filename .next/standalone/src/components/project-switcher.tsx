@@ -62,7 +62,7 @@ export function ProjectSwitcher({
       >
         <SelectTrigger
           aria-label="Current project"
-          className="h-9 w-[min(38vw,240px)] rounded-lg bg-background text-xs sm:w-60 sm:text-sm"
+          className="h-9 w-[min(38vw,240px)] rounded-lg border-border/80 bg-background text-xs shadow-none hover:bg-muted/40 transition-colors sm:w-60 sm:text-sm"
         >
           {pending ? <Loader2 className="size-3.5 animate-spin" /> : null}
           <SelectValue placeholder="Select project" />
