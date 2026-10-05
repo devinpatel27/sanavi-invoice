@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
+  ArrowLeft,
   Download,
   ExternalLink,
   FileText,
@@ -9,6 +10,7 @@ import {
   Plus,
   RotateCcw,
   RotateCw,
+  X,
   ZoomIn,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -16,7 +18,6 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
@@ -62,6 +63,32 @@ export function InvoiceFilePreview({
   const cleanFileName = useMemo(() => getCleanFileName(fileUrl), [fileUrl]);
   const pdf = isPdfUrl(fileUrl) || isPdfUrl(cleanFileName);
 
+  useEffect(() => {
+    if (!open) return;
+    const handlePopState = () => {
+      setOpen(false);
+    };
+    window.history.pushState({ modal: "invoice-file-preview" }, "");
+    window.addEventListener("popstate", handlePopState);
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, [open]);
+
+  const handleClose = () => {
+    if (typeof window !== "undefined" && window.history.state?.modal === "invoice-file-preview") {
+      window.history.back();
+    } else {
+      setOpen(false);
+    }
+  };
+
+  const handleOpen = () => {
+    setZoom(1);
+    setRotation(0);
+    setOpen(true);
+  };
+
   return (
     <div className={cn("min-w-0 max-w-full", className)}>
       {!compact ? (
@@ -73,11 +100,7 @@ export function InvoiceFilePreview({
               type="button"
               className="min-w-0 truncate font-mono text-xs font-medium text-foreground underline-offset-2 hover:underline text-left"
               title={fileUrl}
-              onClick={() => {
-                setZoom(1);
-                setRotation(0);
-                setOpen(true);
-              }}
+              onClick={handleOpen}
             >
               {cleanFileName}
             </button>
@@ -89,11 +112,7 @@ export function InvoiceFilePreview({
               size="sm"
               variant="outline"
               className="h-7 gap-1.5 rounded-lg px-2.5 text-xs"
-              onClick={() => {
-                setZoom(1);
-                setRotation(0);
-                setOpen(true);
-              }}
+              onClick={handleOpen}
             >
               <ZoomIn className="size-3.5" />
               Preview
@@ -119,38 +138,66 @@ export function InvoiceFilePreview({
           size="sm"
           variant="outline"
           className="gap-1.5"
-          onClick={() => {
-            setZoom(1);
-            setRotation(0);
-            setOpen(true);
-          }}
+          onClick={handleOpen}
         >
           <ZoomIn className="size-3.5" />
           Preview
         </Button>
       )}
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog
+        open={open}
+        onOpenChange={(next) => {
+          if (!next) handleClose();
+          else handleOpen();
+        }}
+      >
         <DialogContent
-          className="flex max-h-[92vh] w-[min(96vw,56rem)] max-w-[56rem] flex-col gap-3 overflow-hidden p-4 sm:max-w-[56rem]"
-          showCloseButton
+          className="flex h-[100dvh] w-screen max-w-none rounded-none border-none p-3 sm:h-auto sm:max-h-[92vh] sm:w-[min(96vw,56rem)] sm:max-w-[56rem] sm:rounded-xl sm:border sm:p-4 flex-col gap-2.5 overflow-hidden bg-background"
+          showCloseButton={false}
         >
-          <DialogHeader className="gap-1">
-            <div className="flex items-center gap-2">
-              <DialogTitle className="text-base sm:text-lg">
-                Invoice document
-              </DialogTitle>
-              <Badge variant="secondary" className="text-xs uppercase">
-                {pdf ? "PDF" : "Image"}
-              </Badge>
+          {/* Header with prominent Back button for mobile responsiveness */}
+          <div className="flex items-center justify-between gap-2 border-b pb-2 sm:pb-3">
+            <div className="flex items-center gap-2 min-w-0">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 gap-1.5 px-2.5 text-xs font-medium shrink-0 shadow-xs"
+                onClick={handleClose}
+              >
+                <ArrowLeft className="size-4" />
+                <span>Back</span>
+              </Button>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <DialogTitle className="text-sm font-semibold truncate sm:text-base">
+                    Invoice document
+                  </DialogTitle>
+                  <Badge variant="secondary" className="text-[10px] uppercase font-mono px-1.5 py-0 shrink-0">
+                    {pdf ? "PDF" : "Image"}
+                  </Badge>
+                </div>
+                <DialogDescription className="min-w-0 truncate font-mono text-[11px] text-muted-foreground">
+                  {cleanFileName}
+                </DialogDescription>
+              </div>
             </div>
-            <DialogDescription className="min-w-0 truncate font-mono text-xs">
-              {cleanFileName}
-            </DialogDescription>
-          </DialogHeader>
+
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className="size-8 shrink-0 text-muted-foreground hover:text-foreground"
+              onClick={handleClose}
+              aria-label="Close preview"
+            >
+              <X className="size-4" />
+            </Button>
+          </div>
 
           {/* Dialog Action bar */}
-          <div className="flex flex-wrap items-center justify-between gap-2 border-y py-2">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-2">
             {!pdf ? (
               <div className="flex flex-wrap items-center gap-1.5">
                 <Button

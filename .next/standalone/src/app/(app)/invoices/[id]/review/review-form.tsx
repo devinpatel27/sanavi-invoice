@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { AlertTriangle, Plus, Trash2 } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -349,6 +349,19 @@ export function ReviewForm({
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
+      <div className="flex items-center justify-between gap-3">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-8 gap-1.5 px-2.5 text-xs font-medium"
+          onClick={() => router.push("/invoices")}
+        >
+          <ArrowLeft className="size-4" />
+          <span>Back to invoices</span>
+        </Button>
+      </div>
+
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">

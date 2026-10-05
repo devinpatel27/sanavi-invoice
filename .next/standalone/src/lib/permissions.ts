@@ -39,6 +39,7 @@ const ROLE_PERMISSIONS: Record<"ADMIN" | "STAFF", Set<Permission>> = {
   // STAFF: upload-first workflow — view/review their own invoices, record
   // payments on invoices they can access, and view assigned projects.
   STAFF: new Set<Permission>([
+    "dashboard:view",
     "invoice:view",
     "invoice:upload",
     "invoice:review",

@@ -10,6 +10,7 @@ import {
   assertInvoiceAccess,
   isPayableStatus,
 } from "@/lib/invoices/access";
+import { deleteInvoiceFiles } from "@/lib/azure/blob";
 
 const paymentSchema = z.object({
   invoiceId: z.string().min(1),
@@ -179,6 +180,7 @@ export async function deleteInvoice(invoiceId: string) {
       status: true,
       uploadedById: true,
       projectId: true,
+      fileUrl: true,
     },
   });
 
@@ -204,6 +206,14 @@ export async function deleteInvoice(invoiceId: string) {
     await tx.invoice.delete({ where: { id: invoiceId } });
   });
 
+  if (invoice.fileUrl) {
+    try {
+      await deleteInvoiceFiles([invoice.fileUrl]);
+    } catch (err) {
+      console.warn("Failed to delete invoice blob storage file:", err);
+    }
+  }
+
   await logActivity({
     userId: user.id,
     action: "INVOICE_DELETED",
@@ -212,12 +222,18 @@ export async function deleteInvoice(invoiceId: string) {
     details: { invoiceNumber: invoice.invoiceNumber },
   });
 
+  // Comprehensive cache invalidation so all counts and pages update immediately
+  revalidatePath("/", "layout");
   revalidatePath("/invoices");
+  revalidatePath("/invoices/upload");
   revalidatePath("/payments");
   revalidatePath("/dashboard");
   revalidatePath("/materials");
   revalidatePath("/projects");
   revalidatePath(`/projects/${invoice.projectId}`);
+  revalidatePath("/vendors");
+  revalidatePath("/admin/settings");
+  revalidatePath("/admin/activity");
 
   return { ok: true as const };
 }

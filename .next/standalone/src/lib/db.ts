@@ -16,9 +16,12 @@ const pool =
     connectionTimeoutMillis: 10000,
   });
 
-if (process.env.NODE_ENV !== "production") {
-  globalForPrisma.pool = pool;
-}
+// Handle idle client errors so unexpected database disconnects don't crash Node process
+pool.on("error", (err) => {
+  console.error("Unexpected error on idle pg client:", err);
+});
+
+globalForPrisma.pool = pool;
 
 function createPrismaClient() {
   const adapter = new PrismaPg(pool);
@@ -26,8 +29,6 @@ function createPrismaClient() {
 }
 
 export const db = globalForPrisma.prisma ?? createPrismaClient();
+globalForPrisma.prisma = db;
 
-if (process.env.NODE_ENV !== "production") {
-  globalForPrisma.prisma = db;
-}
 
