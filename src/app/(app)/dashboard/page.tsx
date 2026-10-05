@@ -52,15 +52,28 @@ export default async function DashboardPage({
   });
   const projectFilter: Prisma.InvoiceWhereInput = projectScope.selectedProjectId
     ? { projectId: projectScope.selectedProjectId }
-    : {};
+    : session.user.role === "STAFF"
+      ? { projectId: { in: projectScope.projects.map((p) => p.id) } }
+      : {};
 
   const now = new Date();
 
-  const from = params.from ? new Date(params.from) : undefined;
+  // Robust date parsing: prevent Invalid Date exceptions in Prisma
+  let from: Date | undefined;
+  if (params.from) {
+    const parsed = new Date(params.from);
+    if (!isNaN(parsed.getTime())) {
+      from = parsed;
+    }
+  }
+
   let to: Date | undefined;
   if (params.to) {
-    to = new Date(params.to);
-    to.setHours(23, 59, 59, 999);
+    const parsed = new Date(params.to);
+    if (!isNaN(parsed.getTime())) {
+      parsed.setHours(23, 59, 59, 999);
+      to = parsed;
+    }
   }
 
   const confirmed: Prisma.InvoiceWhereInput = {
@@ -101,7 +114,11 @@ export default async function DashboardPage({
       },
       orderBy: { invoiceDate: "desc" },
     }),
-    projectScope.selectedProjectId ? Promise.resolve(1) : db.project.count(),
+    projectScope.selectedProjectId
+      ? Promise.resolve(1)
+      : session.user.role === "STAFF"
+        ? Promise.resolve(projectScope.projects.length)
+        : db.project.count(),
   ]);
 
   let revenue = 0;
@@ -116,8 +133,8 @@ export default async function DashboardPage({
   const statusMap = new Map<string, StatusPoint>();
 
   for (const inv of reportInvoices) {
-    const invTotal = Number(inv.total);
-    const invPaid = inv.payments.reduce((s, p) => s + Number(p.amount), 0);
+    const invTotal = Number(inv.total ?? 0);
+    const invPaid = (inv.payments ?? []).reduce((s, p) => s + Number(p.amount ?? 0), 0);
     revenue += invTotal;
     paid += invPaid;
     const invBalance = Math.max(0, invTotal - invPaid);
@@ -129,17 +146,16 @@ export default async function DashboardPage({
       overdueCount++;
     }
 
-    if (inv.vendor?.name) {
-      vendorSet.add(inv.vendor.id || inv.vendor.name);
-      const vm = vendorMap.get(inv.vendor.name) ?? {
-        name: inv.vendor.name,
-        total: 0,
-        count: 0,
-      };
-      vm.total += invTotal;
-      vm.count++;
-      vendorMap.set(inv.vendor.name, vm);
-    }
+    const vendorDisplayName = inv.vendor?.name ?? "Unknown Vendor";
+    vendorSet.add(inv.vendor?.id || vendorDisplayName);
+    const vm = vendorMap.get(vendorDisplayName) ?? {
+      name: vendorDisplayName,
+      total: 0,
+      count: 0,
+    };
+    vm.total += invTotal;
+    vm.count++;
+    vendorMap.set(vendorDisplayName, vm);
 
     const catKey = inv.categoryId ?? "UNCATEGORIZED";
     const catName = inv.category?.name ?? "Uncategorized";
@@ -165,7 +181,7 @@ export default async function DashboardPage({
     pm.count++;
     projectMap.set(projKey, pm);
 
-    const statusLabel = inv.status.replaceAll("_", " ");
+    const statusLabel = (inv.status ?? "UNKNOWN").replaceAll("_", " ");
     const sm = statusMap.get(statusLabel) ?? {
       name: statusLabel,
       value: 0,
@@ -180,12 +196,14 @@ export default async function DashboardPage({
   // If user provided a 'to' filter, use that.
   // Otherwise, if confirmed invoices exist and latest is > 6 months ago (e.g. 2024), anchor to that latest date!
   let anchorDate = now;
-  if (to) {
+  if (to && !isNaN(to.getTime())) {
     anchorDate = to;
   } else if (reportInvoices.length > 0) {
-    const latestInvoiceDate = reportInvoices[0].invoiceDate;
-    if (now.getTime() - latestInvoiceDate.getTime() > 180 * 24 * 60 * 60 * 1000) {
-      anchorDate = latestInvoiceDate;
+    const latestInvoiceDate = reportInvoices[0]?.invoiceDate;
+    if (latestInvoiceDate && !isNaN(latestInvoiceDate.getTime())) {
+      if (now.getTime() - latestInvoiceDate.getTime() > 180 * 24 * 60 * 60 * 1000) {
+        anchorDate = latestInvoiceDate;
+      }
     }
   }
 
@@ -193,12 +211,13 @@ export default async function DashboardPage({
   const monthIndex = new Map(monthlySpend.map((p, i) => [p.month, i]));
 
   for (const inv of reportInvoices) {
-    const d = inv.invoiceDate;
+    const d = inv.invoiceDate ? new Date(inv.invoiceDate) : null;
+    if (!d || isNaN(d.getTime())) continue;
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
     const idx = monthIndex.get(key);
     if (idx != null) {
-      monthlySpend[idx].total += Number(inv.total);
-      const invPaid = inv.payments.reduce((s, p) => s + Number(p.amount), 0);
+      monthlySpend[idx].total += Number(inv.total ?? 0);
+      const invPaid = (inv.payments ?? []).reduce((s, p) => s + Number(p.amount ?? 0), 0);
       monthlySpend[idx].paid += invPaid;
     }
   }
@@ -210,11 +229,11 @@ export default async function DashboardPage({
 
   const recentInvoicesMapped: RecentInvoice[] = reportInvoices.slice(0, 8).map((inv) => ({
     id: inv.id,
-    invoiceNumber: inv.invoiceNumber,
-    vendorName: inv.vendor.name,
-    total: Number(inv.total),
-    status: inv.status,
-    invoiceDate: inv.invoiceDate.toISOString(),
+    invoiceNumber: inv.invoiceNumber ?? "",
+    vendorName: inv.vendor?.name ?? "Unknown Vendor",
+    total: Number(inv.total ?? 0),
+    status: inv.status ?? "PROCESSING",
+    invoiceDate: inv.invoiceDate ? new Date(inv.invoiceDate).toISOString() : new Date().toISOString(),
   }));
 
   const pending = Math.max(0, outstandingTotal);

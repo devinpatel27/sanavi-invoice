@@ -78,6 +78,7 @@ export default async function InvoicesPage({
     id: session.user.id,
     role: session.user.role,
   });
+  const userProjectIds = new Set(projectScope.projects.map((p) => p.id));
 
   const andFilters: Prisma.InvoiceWhereInput[] = [];
   if (projectScope.selectedProjectId) {
@@ -255,7 +256,7 @@ export default async function InvoicesPage({
                           fileUrl={invoice.fileUrl}
                           className="min-w-0 flex-1 max-w-full overflow-hidden"
                         />
-                        {(!isStaff || invoice.uploadedById === session.user.id) && (
+                        {(!isStaff || invoice.uploadedById === session.user.id || userProjectIds.has(invoice.projectId)) && (
                           <div className="shrink-0 pt-0.5">
                             <InvoiceDeleteButton
                               invoiceId={invoice.id}
@@ -397,7 +398,7 @@ export default async function InvoicesPage({
                                 paidAmount={paidAmount}
                                 compact
                               />
-                              {(!isStaff || invoice.uploadedById === session.user.id) && (
+                              {(!isStaff || invoice.uploadedById === session.user.id || userProjectIds.has(invoice.projectId)) && (
                                 <InvoiceDeleteButton
                                   invoiceId={invoice.id}
                                   invoiceNumber={invoice.invoiceNumber}

@@ -33,10 +33,9 @@ export function InvoiceDeleteButton({
       const res = await deleteInvoice(invoiceId);
       if (res && "ok" in res && res.ok) {
         toast.success(`Invoice #${invoiceNumber} deleted`);
+        router.refresh();
         if (redirectTo) {
           router.push(redirectTo);
-        } else {
-          router.refresh();
         }
       }
     } catch (error) {
