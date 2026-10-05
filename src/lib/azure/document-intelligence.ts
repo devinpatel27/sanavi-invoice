@@ -138,15 +138,15 @@ export async function extractInvoice(
     ? itemsField.values.map((item) => {
         const props = item?.properties ?? {};
         return {
-          description: String(props["Description"]?.value ?? ""),
+          description: String(props["Description"]?.value ?? "").trim().toUpperCase(),
           productCode:
             typeof props["ProductCode"]?.value === "string"
-              ? props["ProductCode"].value
+              ? props["ProductCode"].value.trim().toUpperCase()
               : undefined,
           quantity: toNumber(props["Quantity"]?.value),
           unit:
             typeof props["Unit"]?.value === "string"
-              ? props["Unit"].value
+              ? props["Unit"].value.trim().toUpperCase()
               : undefined,
           unitPrice: toNumber(props["UnitPrice"]?.value),
           amount: toNumber(props["Amount"]?.value),
@@ -156,9 +156,9 @@ export async function extractInvoice(
     : [];
 
   return {
-    vendorName: getString("VendorName"),
-    vendorGstin: getString("VendorTaxId"),
-    invoiceNumber: getString("InvoiceId"),
+    vendorName: getString("VendorName")?.trim().toUpperCase(),
+    vendorGstin: getString("VendorTaxId")?.trim().toUpperCase(),
+    invoiceNumber: getString("InvoiceId")?.trim().toUpperCase(),
     invoiceDate: getDate("InvoiceDate"),
     dueDate: getDate("DueDate"),
     subtotal: getNumber("SubTotal"),

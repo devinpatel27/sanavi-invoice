@@ -227,11 +227,30 @@ export function MobileBottomBar({ role, name, email }: MobileBottomBarProps) {
           ) : (
             <>
               {/* STAFF VIEW */}
+              {/* Dashboard */}
+              <Link
+                href="/dashboard"
+                className={cn(
+                  "flex flex-1 flex-col items-center justify-center gap-1 py-1 text-[11px] font-medium transition-all duration-150 active:scale-95",
+                  pathname === "/dashboard"
+                    ? "text-primary font-semibold"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <div className="relative">
+                  <LayoutDashboard className="size-5" />
+                  {pathname === "/dashboard" && (
+                    <span className="absolute -top-1 right-1/2 translate-x-1/2 size-1 rounded-full bg-primary" />
+                  )}
+                </div>
+                <span>Dashboard</span>
+              </Link>
+
               {/* My Invoices */}
               <Link
                 href="/invoices"
                 className={cn(
-                  "flex flex-1 flex-col items-center justify-center gap-1 py-1 text-xs font-medium transition-all duration-150 active:scale-95",
+                  "flex flex-1 flex-col items-center justify-center gap-1 py-1 text-[11px] font-medium transition-all duration-150 active:scale-95",
                   pathname.startsWith("/invoices") && !isUploadActive
                     ? "text-primary font-semibold"
                     : "text-muted-foreground hover:text-foreground"

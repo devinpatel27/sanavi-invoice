@@ -43,9 +43,6 @@ export default async function DashboardPage({
 }) {
   const session = await auth();
   if (!session?.user) redirect("/login");
-  if (session.user.role === "STAFF") {
-    redirect("/invoices/upload");
-  }
 
   const params = await searchParams;
   const selectedCategoryId = params.categoryId ?? "";
