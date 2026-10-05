@@ -19,6 +19,12 @@ const lineItemSchema = z.object({
   createMaterial: z.boolean().optional(),
 });
 
+const customTaxSchema = z.object({
+  id: z.string().optional(),
+  title: z.string().min(1),
+  amount: z.coerce.number(),
+});
+
 const confirmSchema = z.object({
   invoiceId: z.string().min(1),
   invoiceNumber: z.string().min(1),
@@ -33,9 +39,9 @@ const confirmSchema = z.object({
   sgst: z.coerce.number().nonnegative(),
   cgst: z.coerce.number().nonnegative(),
   igst: z.coerce.number().nonnegative(),
+  customTaxes: z.array(customTaxSchema).optional(),
   total: z.coerce.number().nonnegative(),
   lineItems: z.array(lineItemSchema).min(1),
-  forceDuplicate: z.boolean().optional(),
 });
 
 export type ConfirmInvoiceInput = z.infer<typeof confirmSchema>;
@@ -204,18 +210,17 @@ export async function confirmInvoiceReview(raw: ConfirmInvoiceInput) {
     vendorId = vendor.id;
   }
 
+  const upperInvoiceNumber = parsed.invoiceNumber.trim().toUpperCase();
   const duplicate = await checkDuplicateInvoice(
     vendorId,
-    parsed.invoiceNumber.trim(),
+    upperInvoiceNumber,
     invoice.id
   );
-  if (duplicate && !parsed.forceDuplicate) {
-    return {
-      ok: false as const,
-      duplicate: true,
-      duplicateId: duplicate.id,
-      message: `An invoice with number "${parsed.invoiceNumber}" already exists for this vendor.`,
-    };
+  if (duplicate) {
+    throw new AppError(
+      "VALIDATION_001",
+      `Invoice number "${upperInvoiceNumber}" already exists for this vendor. Duplicate invoice numbers are not allowed.`
+    );
   }
 
   await db.$transaction(async (tx) => {
@@ -233,13 +238,14 @@ export async function confirmInvoiceReview(raw: ConfirmInvoiceInput) {
 
       for (const item of parsed.lineItems) {
         if (item.createMaterial && item.description.trim()) {
-          const key = item.description.toLowerCase().trim();
+          const upperDesc = item.description.trim().toUpperCase();
+          const key = upperDesc.toLowerCase();
           if (!materialMap.has(key)) {
             const created = await tx.material.create({
               data: {
                 categoryId: parsed.categoryId,
-                name: item.description.trim(),
-                defaultUnit: item.unit.trim() || "NOS",
+                name: upperDesc,
+                defaultUnit: item.unit.trim().toUpperCase() || "NOS",
               },
               select: { id: true },
             });
@@ -250,7 +256,8 @@ export async function confirmInvoiceReview(raw: ConfirmInvoiceInput) {
     }
 
     const lineItemsData = parsed.lineItems.map((item) => {
-      const key = item.description.toLowerCase().trim();
+      const upperDesc = item.description.trim().toUpperCase();
+      const key = upperDesc.toLowerCase();
       const materialId =
         item.createMaterial && parsed.categoryId
           ? (materialMap.get(key) ?? null)
@@ -265,9 +272,9 @@ export async function confirmInvoiceReview(raw: ConfirmInvoiceInput) {
       return {
         invoiceId: invoice.id,
         materialId,
-        description: item.description,
+        description: upperDesc,
         quantity: d(item.quantity),
-        unit: item.unit,
+        unit: item.unit.trim().toUpperCase(),
         rateExclGst: d(item.rateExclGst),
         gstPercent: d(item.gstPercent),
         gstAmount: d(gstAmount),
@@ -291,10 +298,16 @@ export async function confirmInvoiceReview(raw: ConfirmInvoiceInput) {
             ? "OVERDUE"
             : "UNPAID";
 
+    const currentRaw = (invoice.extractionRaw as Prisma.JsonObject) || {};
+    const updatedRaw = {
+      ...currentRaw,
+      customTaxes: parsed.customTaxes ?? [],
+    };
+
     await tx.invoice.update({
       where: { id: invoice.id },
       data: {
-        invoiceNumber: parsed.invoiceNumber.trim(),
+        invoiceNumber: upperInvoiceNumber,
         invoiceDate: new Date(parsed.invoiceDate),
         dueDate: parsed.dueDate ? new Date(parsed.dueDate) : null,
         vendorId,
@@ -305,6 +318,7 @@ export async function confirmInvoiceReview(raw: ConfirmInvoiceInput) {
         cgst: d(parsed.cgst),
         igst: d(parsed.igst),
         total: d(parsed.total),
+        extractionRaw: updatedRaw,
         status: nextStatus,
         paidAt:
           nextStatus === "PAID"

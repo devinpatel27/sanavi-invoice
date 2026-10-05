@@ -46,6 +46,12 @@ export type ReviewLineItem = {
   confidence?: number;
 };
 
+export type CustomTaxLine = {
+  id: string;
+  title: string;
+  amount: number;
+};
+
 export type ReviewInvoice = {
   id: string;
   invoiceNumber: string;
@@ -60,6 +66,7 @@ export type ReviewInvoice = {
   cgst: number;
   igst: number;
   total: number;
+  customTaxes?: { id?: string; title: string; amount: number }[];
   fileUrl: string;
   status: string;
   paidAt: string | null;
@@ -93,54 +100,114 @@ export function ReviewForm({
   const [vendors, setVendors] = useState(initialVendors);
   const [categories, setCategories] = useState(initialCategories);
 
-  const [invoiceNumber, setInvoiceNumber] = useState(invoice.invoiceNumber);
+  const [invoiceNumber, setInvoiceNumber] = useState(invoice.invoiceNumber.toUpperCase());
   const [invoiceDate, setInvoiceDate] = useState(
     toDateInput(invoice.invoiceDate)
   );
   const [dueDate, setDueDate] = useState(toDateInput(invoice.dueDate));
   const [vendorId, setVendorId] = useState(invoice.vendorId);
-  const [vendorName, setVendorName] = useState(invoice.vendor.name);
-  const [vendorGstin, setVendorGstin] = useState(invoice.vendor.gstin ?? "");
+  const [vendorName, setVendorName] = useState(invoice.vendor.name.toUpperCase());
+  const [vendorGstin, setVendorGstin] = useState(
+    (invoice.vendor.gstin ?? "").toUpperCase()
+  );
   const [categoryId, setCategoryId] = useState(invoice.categoryId ?? "");
   const [projectId, setProjectId] = useState(invoice.projectId);
   const [subtotal, setSubtotal] = useState(invoice.subtotal);
   const [sgst, setSgst] = useState(invoice.sgst);
   const [cgst, setCgst] = useState(invoice.cgst);
   const [igst, setIgst] = useState(invoice.igst);
+  const [customTaxes, setCustomTaxes] = useState<CustomTaxLine[]>(
+    () =>
+      invoice.customTaxes?.map((t, idx) => ({
+        id: t.id || `ctax-${idx}-${Date.now()}`,
+        title: (t.title || "").toUpperCase(),
+        amount: Number(t.amount) || 0,
+      })) ?? []
+  );
   const [total, setTotal] = useState(invoice.total);
   const [lineItems, setLineItems] = useState(
-    invoice.lineItems.map((li) => ({ ...li, createMaterial: false }))
+    invoice.lineItems.map((li) => ({
+      ...li,
+      description: li.description.toUpperCase(),
+      unit: li.unit.toUpperCase(),
+      createMaterial: false,
+    }))
   );
   const [newCategoryName, setNewCategoryName] = useState("");
   const [dupWarning, setDupWarning] = useState(possibleDuplicate);
-  const [forceDuplicate, setForceDuplicate] = useState(false);
 
   const round2 = (num: number) => Math.round((num + Number.EPSILON) * 100) / 100;
 
+  const getCustomTaxesSum = (taxes: CustomTaxLine[]) =>
+    taxes.reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+
   function handleSubtotalChange(val: number) {
     setSubtotal(val);
-    setTotal(round2(val + sgst + cgst + igst));
+    setTotal(round2(val + sgst + cgst + igst + getCustomTaxesSum(customTaxes)));
   }
 
   function handleSgstChange(val: number) {
     setSgst(val);
     setCgst(val);
-    setTotal(round2(subtotal + val * 2 + igst));
+    setTotal(round2(subtotal + val * 2 + igst + getCustomTaxesSum(customTaxes)));
   }
 
   function handleCgstChange(val: number) {
     setCgst(val);
     setSgst(val);
-    setTotal(round2(subtotal + val * 2 + igst));
+    setTotal(round2(subtotal + val * 2 + igst + getCustomTaxesSum(customTaxes)));
   }
 
   function handleIgstChange(val: number) {
     setIgst(val);
-    setTotal(round2(subtotal + sgst + cgst + val));
+    setTotal(round2(subtotal + sgst + cgst + val + getCustomTaxesSum(customTaxes)));
   }
 
   function handleTotalChange(val: number) {
     setTotal(val);
+  }
+
+  function addCustomTax() {
+    setCustomTaxes((prev) => [
+      ...prev,
+      {
+        id: `ctax-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        title: "",
+        amount: 0,
+      },
+    ]);
+  }
+
+  function updateCustomTax(id: string, patch: Partial<CustomTaxLine>) {
+    setCustomTaxes((prev) => {
+      const next = prev.map((t) => {
+        if (t.id !== id) return t;
+        const updated = { ...t, ...patch };
+        if (patch.title !== undefined) {
+          updated.title = patch.title.toUpperCase();
+        }
+        return updated;
+      });
+      setTotal(round2(subtotal + sgst + cgst + igst + getCustomTaxesSum(next)));
+      return next;
+    });
+  }
+
+  function removeCustomTax(id: string) {
+    setCustomTaxes((prev) => {
+      const next = prev.filter((t) => t.id !== id);
+      setTotal(round2(subtotal + sgst + cgst + igst + getCustomTaxesSum(next)));
+      return next;
+    });
+  }
+
+  async function onInvoiceNumberChange(val: string) {
+    const upper = val.toUpperCase();
+    setInvoiceNumber(upper);
+    if (vendorId && upper.trim()) {
+      const dup = await checkDuplicateInvoice(vendorId, upper, invoice.id);
+      setDupWarning(Boolean(dup));
+    }
   }
 
   const lowConfidenceCount = useMemo(
@@ -214,48 +281,55 @@ export function ReviewForm({
     setVendorId(id);
     const v = vendors.find((x) => x.id === id);
     if (v) {
-      setVendorName(v.name);
-      setVendorGstin(v.gstin ?? "");
+      setVendorName(v.name.toUpperCase());
+      setVendorGstin((v.gstin ?? "").toUpperCase());
       const dup = await checkDuplicateInvoice(id, invoiceNumber, invoice.id);
       setDupWarning(Boolean(dup));
     }
   }
 
   function handleConfirm() {
+    if (dupWarning) {
+      toast.error(
+        `Invoice number "${invoiceNumber}" already exists for this vendor. Duplicate invoice numbers are not allowed.`
+      );
+      return;
+    }
+
     startTransition(async () => {
       try {
         const result = await confirmInvoiceReview({
           invoiceId: invoice.id,
-          invoiceNumber,
+          invoiceNumber: invoiceNumber.trim().toUpperCase(),
           invoiceDate,
           dueDate: dueDate || null,
           vendorId,
-          vendorName,
-          vendorGstin: vendorGstin || null,
+          vendorName: vendorName.trim().toUpperCase(),
+          vendorGstin: vendorGstin ? vendorGstin.trim().toUpperCase() : null,
           categoryId: categoryId || null,
           projectId,
           subtotal,
           sgst,
           cgst,
           igst,
+          customTaxes: customTaxes
+            .filter((t) => t.title.trim())
+            .map((t) => ({
+              id: t.id,
+              title: t.title.trim().toUpperCase(),
+              amount: Number(t.amount) || 0,
+            })),
           total,
-          forceDuplicate,
           lineItems: lineItems.map((li) => ({
             id: li.id,
-            description: li.description,
+            description: li.description.trim().toUpperCase(),
             quantity: li.quantity,
-            unit: li.unit,
+            unit: li.unit.trim().toUpperCase(),
             rateExclGst: li.rateExclGst,
             gstPercent: li.gstPercent,
             createMaterial: li.createMaterial,
           })),
         });
-
-        if (result && "duplicate" in result && result.duplicate) {
-          setDupWarning(true);
-          toast.error(result.message);
-          return;
-        }
 
         if (result && "ok" in result && result.ok && result.redirectUrl) {
           const wasDraft =
@@ -287,6 +361,12 @@ export function ReviewForm({
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {dupWarning && (
+            <Badge variant="destructive" className="gap-1">
+              <AlertTriangle className="size-3" />
+              Duplicate Invoice #
+            </Badge>
+          )}
           <Badge variant="secondary">{invoice.status.replace("_", " ")}</Badge>
           {lowConfidenceCount > 0 && (
             <Badge variant="outline" className="gap-1 text-amber-700">
@@ -298,22 +378,14 @@ export function ReviewForm({
       </div>
 
       {dupWarning && (
-        <div className="flex items-start gap-3 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
-          <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-          <div className="space-y-2">
-            <p className="font-medium">Possible duplicate invoice</p>
-            <p className="text-muted-foreground dark:text-amber-200/80">
-              Another invoice with this number may already exist for the selected
-              vendor. Double-check before confirming.
+        <div className="flex items-start gap-3 rounded-xl border border-destructive/50 bg-destructive/10 p-4 text-sm text-destructive dark:border-destructive/60 dark:bg-destructive/15">
+          <AlertTriangle className="mt-0.5 size-5 shrink-0" />
+          <div className="space-y-1">
+            <p className="font-semibold text-base">Duplicate Invoice Code Error</p>
+            <p className="text-destructive/90 text-sm">
+              Another invoice with number <strong>&ldquo;{invoiceNumber}&rdquo;</strong> already exists for the selected vendor.
+              Duplicate invoice codes are not allowed. Please modify the invoice number before saving.
             </p>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={forceDuplicate}
-                onChange={(e) => setForceDuplicate(e.target.checked)}
-              />
-              Confirm anyway (force save)
-            </label>
           </div>
         </div>
       )}
@@ -354,7 +426,8 @@ export function ReviewForm({
             <Input
               id="vendorName"
               value={vendorName}
-              onChange={(e) => setVendorName(e.target.value)}
+              onChange={(e) => setVendorName(e.target.value.toUpperCase())}
+              className="uppercase"
             />
           </div>
           <div className="grid gap-2">
@@ -362,7 +435,8 @@ export function ReviewForm({
             <Input
               id="vendorGstin"
               value={vendorGstin}
-              onChange={(e) => setVendorGstin(e.target.value)}
+              onChange={(e) => setVendorGstin(e.target.value.toUpperCase())}
+              className="uppercase"
             />
           </div>
           <div className="sm:col-span-2">
@@ -376,7 +450,8 @@ export function ReviewForm({
             <Input
               id="invoiceNumber"
               value={invoiceNumber}
-              onChange={(e) => setInvoiceNumber(e.target.value)}
+              onChange={(e) => void onInvoiceNumberChange(e.target.value)}
+              className="uppercase"
             />
           </div>
           <div className="grid gap-2">
@@ -502,8 +577,9 @@ export function ReviewForm({
                   placeholder="Description"
                   value={li.description}
                   onChange={(e) =>
-                    updateLine(index, { description: e.target.value })
+                    updateLine(index, { description: e.target.value.toUpperCase() })
                   }
+                  className="uppercase"
                 />
                 <div className="grid grid-cols-2 gap-2">
                   <Input
@@ -521,7 +597,8 @@ export function ReviewForm({
                   <Input
                     placeholder="Unit"
                     value={li.unit}
-                    onChange={(e) => updateLine(index, { unit: e.target.value })}
+                    onChange={(e) => updateLine(index, { unit: e.target.value.toUpperCase() })}
+                    className="uppercase"
                   />
                   <Input
                     type="number"
@@ -584,8 +661,9 @@ export function ReviewForm({
                         <Input
                           value={li.description}
                           onChange={(e) =>
-                            updateLine(index, { description: e.target.value })
+                            updateLine(index, { description: e.target.value.toUpperCase() })
                           }
+                          className="uppercase"
                         />
                         {li.confidence != null && li.confidence < 0.7 && (
                           <Badge variant="outline" className="shrink-0 text-[10px]">
@@ -613,8 +691,9 @@ export function ReviewForm({
                         placeholder="NOS"
                         value={li.unit}
                         onChange={(e) =>
-                          updateLine(index, { unit: e.target.value })
+                          updateLine(index, { unit: e.target.value.toUpperCase() })
                         }
+                        className="uppercase"
                       />
                     </td>
                     <td className="py-2 pr-2 w-28">
@@ -680,79 +759,151 @@ export function ReviewForm({
 
       <Card>
         <CardHeader>
-          <CardTitle>Totals</CardTitle>
+          <CardTitle>Totals &amp; Taxes</CardTitle>
+          <CardDescription>Review subtotal, standard GST, and custom charges</CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-          <div className="grid gap-2">
-            <Label>Subtotal</Label>
-            <Input
-              type="number"
-              step="any"
-              placeholder="0.00"
-              value={subtotal === 0 ? "" : subtotal}
-              onFocus={(e) => e.target.select()}
-              onChange={(e) =>
-                handleSubtotalChange(e.target.value === "" ? 0 : Number(e.target.value))
-              }
-            />
-          </div>
-          <div className="grid gap-2">
-            <div className="flex items-center justify-between">
-              <Label>SGST</Label>
-              <span className="text-[10px] text-muted-foreground font-medium">(Auto-sync)</span>
+        <CardContent className="space-y-5">
+          {/* Main Subtotal and Default Taxes */}
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-2">
+              <Label>Subtotal</Label>
+              <Input
+                type="number"
+                step="any"
+                placeholder="0.00"
+                value={subtotal === 0 ? "" : subtotal}
+                onFocus={(e) => e.target.select()}
+                onChange={(e) =>
+                  handleSubtotalChange(e.target.value === "" ? 0 : Number(e.target.value))
+                }
+              />
             </div>
-            <Input
-              type="number"
-              step="any"
-              placeholder="0.00"
-              value={sgst === 0 ? "" : sgst}
-              onFocus={(e) => e.target.select()}
-              onChange={(e) =>
-                handleSgstChange(e.target.value === "" ? 0 : Number(e.target.value))
-              }
-            />
-          </div>
-          <div className="grid gap-2">
-            <div className="flex items-center justify-between">
-              <Label>CGST</Label>
-              <span className="text-[10px] text-muted-foreground font-medium">(Auto-sync)</span>
+            <div className="grid gap-2">
+              <div className="flex items-center justify-between">
+                <Label>SGST</Label>
+                <span className="text-[10px] text-muted-foreground font-medium">(Auto-sync)</span>
+              </div>
+              <Input
+                type="number"
+                step="any"
+                placeholder="0.00"
+                value={sgst === 0 ? "" : sgst}
+                onFocus={(e) => e.target.select()}
+                onChange={(e) =>
+                  handleSgstChange(e.target.value === "" ? 0 : Number(e.target.value))
+                }
+              />
             </div>
-            <Input
-              type="number"
-              step="any"
-              placeholder="0.00"
-              value={cgst === 0 ? "" : cgst}
-              onFocus={(e) => e.target.select()}
-              onChange={(e) =>
-                handleCgstChange(e.target.value === "" ? 0 : Number(e.target.value))
-              }
-            />
+            <div className="grid gap-2">
+              <div className="flex items-center justify-between">
+                <Label>CGST</Label>
+                <span className="text-[10px] text-muted-foreground font-medium">(Auto-sync)</span>
+              </div>
+              <Input
+                type="number"
+                step="any"
+                placeholder="0.00"
+                value={cgst === 0 ? "" : cgst}
+                onFocus={(e) => e.target.select()}
+                onChange={(e) =>
+                  handleCgstChange(e.target.value === "" ? 0 : Number(e.target.value))
+                }
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label>IGST</Label>
+              <Input
+                type="number"
+                step="any"
+                placeholder="0.00"
+                value={igst === 0 ? "" : igst}
+                onFocus={(e) => e.target.select()}
+                onChange={(e) =>
+                  handleIgstChange(e.target.value === "" ? 0 : Number(e.target.value))
+                }
+              />
+            </div>
           </div>
-          <div className="grid gap-2">
-            <Label>IGST</Label>
-            <Input
-              type="number"
-              step="any"
-              placeholder="0.00"
-              value={igst === 0 ? "" : igst}
-              onFocus={(e) => e.target.select()}
-              onChange={(e) =>
-                handleIgstChange(e.target.value === "" ? 0 : Number(e.target.value))
-              }
-            />
+
+          {/* Custom / Additional Taxes & Charges Section */}
+          <div className="rounded-xl border border-dashed border-border/80 bg-muted/20 p-3.5 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold text-foreground">Additional Taxes &amp; Charges</p>
+                <p className="text-[11px] text-muted-foreground">Add specific taxes (e.g. TDS, Cess, Freight GST, RCM, TCS) for this invoice</p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={addCustomTax}
+                className="h-8 gap-1.5 text-xs rounded-lg font-medium"
+              >
+                <Plus className="size-3.5" />
+                Add Tax / Charge
+              </Button>
+            </div>
+
+            {customTaxes.length > 0 && (
+              <div className="space-y-2 pt-1">
+                {customTaxes.map((tax) => (
+                  <div key={tax.id} className="flex items-center gap-2">
+                    <Input
+                      placeholder="Tax Title (e.g. TDS, CESS, FREIGHT)"
+                      value={tax.title}
+                      onChange={(e) => updateCustomTax(tax.id, { title: e.target.value })}
+                      className="h-9 flex-1 uppercase text-xs"
+                    />
+                    <div className="w-36">
+                      <Input
+                        type="number"
+                        step="any"
+                        placeholder="Amount (₹)"
+                        value={tax.amount === 0 ? "" : tax.amount}
+                        onFocus={(e) => e.target.select()}
+                        onChange={(e) =>
+                          updateCustomTax(tax.id, {
+                            amount: e.target.value === "" ? 0 : Number(e.target.value),
+                          })
+                        }
+                        className="h-9 text-xs"
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => removeCustomTax(tax.id)}
+                      className="size-8 text-muted-foreground hover:text-destructive shrink-0"
+                      title="Remove tax line"
+                    >
+                      <Trash2 className="size-3.5" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-          <div className="grid gap-2">
-            <Label>Total</Label>
-            <Input
-              type="number"
-              step="any"
-              placeholder="0.00"
-              value={total === 0 ? "" : total}
-              onFocus={(e) => e.target.select()}
-              onChange={(e) =>
-                handleTotalChange(e.target.value === "" ? 0 : Number(e.target.value))
-              }
-            />
+
+          {/* Final Total Amount */}
+          <div className="flex flex-col gap-2 rounded-xl bg-muted/40 p-4 border border-border/60 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <Label className="text-sm font-semibold">Total Amount (₹)</Label>
+              <p className="text-xs text-muted-foreground">Calculated with subtotal, standard GST and additional charges</p>
+            </div>
+            <div className="w-full sm:w-48">
+              <Input
+                type="number"
+                step="any"
+                placeholder="0.00"
+                value={total === 0 ? "" : total}
+                onFocus={(e) => e.target.select()}
+                onChange={(e) =>
+                  handleTotalChange(e.target.value === "" ? 0 : Number(e.target.value))
+                }
+                className="h-11 text-base font-bold"
+              />
+            </div>
           </div>
         </CardContent>
       </Card>

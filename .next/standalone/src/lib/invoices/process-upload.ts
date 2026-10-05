@@ -25,8 +25,8 @@ function halfTax(totalTax: number | undefined) {
 }
 
 async function resolveVendor(extracted: ExtractedInvoice) {
-  const gstin = extracted.vendorGstin?.trim() || undefined;
-  const name = extracted.vendorName?.trim() || "Unknown Vendor";
+  const gstin = extracted.vendorGstin?.trim().toUpperCase() || undefined;
+  const name = (extracted.vendorName?.trim() || "UNKNOWN VENDOR").toUpperCase();
 
   if (gstin) {
     const byGstin = await db.vendor.findUnique({ where: { gstin } });
@@ -98,8 +98,9 @@ export async function processInvoiceUpload(params: {
   await assertProjectAccess(projectId, { id: userId, role });
   const vendor = await resolveVendor(extracted);
 
-  const invoiceNumber =
-    extracted.invoiceNumber?.trim() || `DRAFT-${Date.now()}`;
+  const invoiceNumber = (
+    extracted.invoiceNumber?.trim() || `DRAFT-${Date.now()}`
+  ).toUpperCase();
   const invoiceDate = extracted.invoiceDate
     ? new Date(extracted.invoiceDate)
     : new Date();
@@ -109,19 +110,22 @@ export async function processInvoiceUpload(params: {
     extracted.invoiceTotal ??
     (extracted.subtotal ?? 0) + (extracted.totalTax ?? 0);
 
-  // Avoid unique constraint collisions on draft create — if duplicate exists,
-  // still create with a temporary number; review page will warn.
-  let finalNumber = invoiceNumber;
-  const existing = await db.invoice.findUnique({
-    where: {
-      vendorId_invoiceNumber: {
+  // Check for duplicate invoice on upload
+  // If invoice already exists for this vendor, throw an error and reject the upload!
+  const isAutoDraft = invoiceNumber.startsWith("DRAFT-");
+  if (!isAutoDraft) {
+    const existing = await db.invoice.findFirst({
+      where: {
         vendorId: vendor.id,
-        invoiceNumber,
+        invoiceNumber: { equals: invoiceNumber, mode: "insensitive" },
       },
-    },
-  });
-  if (existing) {
-    finalNumber = `${invoiceNumber}-REVIEW-${Date.now()}`;
+      select: { id: true, invoiceNumber: true },
+    });
+    if (existing) {
+      throw new Error(
+        `Invoice #${invoiceNumber} already exists for vendor "${vendor.name}". Duplicate invoice cannot be uploaded.`
+      );
+    }
   }
 
   // Strip non-serializable bits; keep a small normalized summary for the review UI
@@ -130,9 +134,9 @@ export async function processInvoiceUpload(params: {
       {
         ...extracted.raw,
         _normalized: {
-          vendorName: extracted.vendorName,
-          vendorGstin: extracted.vendorGstin,
-          invoiceNumber: extracted.invoiceNumber,
+          vendorName: vendor.name,
+          vendorGstin: vendor.gstin,
+          invoiceNumber,
           lineItemConfidences: extracted.lineItems.map((i) => i.confidence),
         },
       },
@@ -143,7 +147,7 @@ export async function processInvoiceUpload(params: {
   const invoice = await db.$transaction(async (tx) => {
     const created = await tx.invoice.create({
       data: {
-        invoiceNumber: finalNumber,
+        invoiceNumber,
         projectId,
         vendorId: vendor.id,
         categoryId: resolvedCategoryId,
@@ -164,9 +168,9 @@ export async function processInvoiceUpload(params: {
             const rate = item.unitPrice ?? 0;
             const amount = item.amount ?? qty * rate;
             return {
-              description: item.description || "Line item",
+              description: (item.description || "LINE ITEM").trim().toUpperCase(),
               quantity: decimal(qty, 1),
-              unit: item.unit || "NOS",
+              unit: (item.unit || "NOS").trim().toUpperCase(),
               rateExclGst: decimal(rate),
               gstPercent: decimal(0),
               gstAmount: decimal(0),
@@ -182,7 +186,7 @@ export async function processInvoiceUpload(params: {
 
   return {
     invoiceId: invoice.id,
-    duplicateWarning: Boolean(existing),
-    originalInvoiceNumber: existing ? invoiceNumber : null,
+    duplicateWarning: false,
+    originalInvoiceNumber: null,
   };
 }

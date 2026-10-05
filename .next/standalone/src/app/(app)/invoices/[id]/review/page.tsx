@@ -57,9 +57,13 @@ export default async function InvoiceReviewPage({ params }: PageProps) {
   ]);
 
   const raw = invoice.extractionRaw as
-    | { _normalized?: { lineItemConfidences?: number[] } }
+    | {
+        _normalized?: { lineItemConfidences?: number[] };
+        customTaxes?: { id?: string; title: string; amount: number }[];
+      }
     | null;
   const itemConfidences = raw?._normalized?.lineItemConfidences ?? [];
+  const customTaxes = raw?.customTaxes ?? [];
 
   const duplicate = await db.invoice.findFirst({
     where: {
@@ -91,6 +95,7 @@ export default async function InvoiceReviewPage({ params }: PageProps) {
           cgst: Number(invoice.cgst),
           igst: Number(invoice.igst),
           total: Number(invoice.total),
+          customTaxes,
           fileUrl: invoice.fileUrl,
           status: invoice.status,
           paidAt: invoice.paidAt?.toISOString() ?? null,

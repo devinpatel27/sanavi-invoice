@@ -1,6 +1,6 @@
 {
   "node": {
-    "404eeeffb5aadf30564380b1ca504dc2d49090f72e": {
+    "40c8ec448c5eecf544a0ffc43fa72c6116be7cf4ec": {
       "workers": {
         "app/(app)/admin/settings/page": {
           "moduleId": 755864,

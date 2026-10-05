@@ -6,8 +6,5 @@ export default async function HomePage() {
   if (!session?.user) {
     redirect("/login");
   }
-  if (session.user.role === "STAFF") {
-    redirect("/invoices/upload");
-  }
   redirect("/dashboard");
 }

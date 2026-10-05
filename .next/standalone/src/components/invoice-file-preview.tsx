@@ -8,6 +8,7 @@ import {
   Minus,
   Plus,
   RotateCcw,
+  RotateCw,
   ZoomIn,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -56,6 +57,7 @@ export function InvoiceFilePreview({
 }) {
   const [open, setOpen] = useState(false);
   const [zoom, setZoom] = useState(1);
+  const [rotation, setRotation] = useState(0);
   const serveUrl = `/api/invoices/${invoiceId}/file`;
   const cleanFileName = useMemo(() => getCleanFileName(fileUrl), [fileUrl]);
   const pdf = isPdfUrl(fileUrl) || isPdfUrl(cleanFileName);
@@ -73,6 +75,7 @@ export function InvoiceFilePreview({
               title={fileUrl}
               onClick={() => {
                 setZoom(1);
+                setRotation(0);
                 setOpen(true);
               }}
             >
@@ -88,6 +91,7 @@ export function InvoiceFilePreview({
               className="h-7 gap-1.5 rounded-lg px-2.5 text-xs"
               onClick={() => {
                 setZoom(1);
+                setRotation(0);
                 setOpen(true);
               }}
             >
@@ -117,6 +121,7 @@ export function InvoiceFilePreview({
           className="gap-1.5"
           onClick={() => {
             setZoom(1);
+            setRotation(0);
             setOpen(true);
           }}
         >
@@ -171,9 +176,23 @@ export function InvoiceFilePreview({
                 <Button
                   type="button"
                   size="sm"
+                  variant="outline"
+                  className="h-8 gap-1 px-2 text-xs font-medium"
+                  onClick={() => setRotation((r) => (r + 90) % 360)}
+                  title="Rotate clockwise 90°"
+                >
+                  <RotateCw className="size-3.5" />
+                  Rotate {rotation > 0 ? `(${rotation}°)` : ""}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
                   variant="ghost"
                   className="h-8 gap-1 px-2 text-xs"
-                  onClick={() => setZoom(1)}
+                  onClick={() => {
+                    setZoom(1);
+                    setRotation(0);
+                  }}
                 >
                   <RotateCcw className="size-3.5" />
                   Reset
@@ -183,8 +202,33 @@ export function InvoiceFilePreview({
                 </span>
               </div>
             ) : (
-              <div className="text-xs text-muted-foreground">
-                Document preview
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-8 gap-1 px-2 text-xs font-medium"
+                  onClick={() => setRotation((r) => (r + 90) % 360)}
+                  title="Rotate clockwise 90°"
+                >
+                  <RotateCw className="size-3.5" />
+                  Rotate {rotation > 0 ? `(${rotation}°)` : ""}
+                </Button>
+                {rotation > 0 && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="h-8 gap-1 px-2 text-xs"
+                    onClick={() => setRotation(0)}
+                  >
+                    <RotateCcw className="size-3.5" />
+                    Reset
+                  </Button>
+                )}
+                <span className="text-xs text-muted-foreground">
+                  Document preview
+                </span>
               </div>
             )}
 
@@ -220,11 +264,12 @@ export function InvoiceFilePreview({
 
           <div className="min-h-0 flex-1 overflow-auto rounded-lg border bg-muted/30">
             {pdf ? (
-              <div className="flex h-full min-h-[60vh] flex-col">
+              <div className="flex h-full min-h-[60vh] flex-col items-center justify-center overflow-hidden">
                 <object
                   data={`${serveUrl}#toolbar=0`}
                   type="application/pdf"
-                  className="h-[68vh] w-full bg-background"
+                  className="h-[68vh] w-full bg-background transition-transform duration-200 origin-center"
+                  style={rotation ? { transform: `rotate(${rotation}deg)` } : undefined}
                 >
                   {/* Fallback when browser/mobile doesn't support embedded PDF */}
                   <div className="flex min-h-[50vh] flex-col items-center justify-center gap-3 p-6 text-center">
@@ -266,13 +311,13 @@ export function InvoiceFilePreview({
                 </object>
               </div>
             ) : (
-              <div className="flex min-h-[50vh] items-start justify-center p-4">
+              <div className="flex min-h-[50vh] items-center justify-center p-4 overflow-auto">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={serveUrl}
                   alt="Invoice preview"
-                  className="origin-top rounded-md border bg-background shadow-xs transition-transform duration-200"
-                  style={{ transform: `scale(${zoom})` }}
+                  className="max-w-full rounded-md border bg-background shadow-xs transition-transform duration-200 origin-center"
+                  style={{ transform: `scale(${zoom}) rotate(${rotation}deg)` }}
                   draggable={false}
                 />
               </div>
