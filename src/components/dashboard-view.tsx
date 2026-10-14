@@ -22,6 +22,7 @@ import {
   Banknote,
   Building2,
   Clock,
+  FileText,
   FolderKanban,
   IndianRupee,
   SlidersHorizontal,
@@ -112,6 +113,7 @@ function todayInput(offsetDays = 0) {
 }
 
 export function DashboardView({
+  role,
   revenue,
   paid,
   pending,
@@ -119,6 +121,8 @@ export function DashboardView({
   overdueCount,
   projectsCount,
   clientsCount,
+  monthlyBillCount,
+  selectedMonth,
   monthlySpend,
   categorySpend,
   statusBreakdown,
@@ -130,6 +134,7 @@ export function DashboardView({
   from,
   to,
 }: {
+  role: "ADMIN" | "STAFF";
   revenue: number;
   paid: number;
   pending: number;
@@ -137,6 +142,8 @@ export function DashboardView({
   overdueCount: number;
   projectsCount: number;
   clientsCount: number;
+  monthlyBillCount: number;
+  selectedMonth: string;
   monthlySpend: MonthSpendPoint[];
   categorySpend: CategorySpendPoint[];
   statusBreakdown: StatusPoint[];
@@ -173,6 +180,14 @@ export function DashboardView({
     else params.delete("to");
     if (next.categoryId) params.set("categoryId", next.categoryId);
     else params.delete("categoryId");
+    const qs = params.toString();
+    startTransition(() => router.push(qs ? `${pathname}?${qs}` : pathname));
+  }
+
+  function applyMonth(month: string) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (month) params.set("month", month);
+    else params.delete("month");
     const qs = params.toString();
     startTransition(() => router.push(qs ? `${pathname}?${qs}` : pathname));
   }
@@ -239,6 +254,35 @@ export function DashboardView({
 
   return (
     <div className="flex flex-col gap-4">
+      {role === "STAFF" && (
+        <div className="flex items-end justify-between gap-4 rounded-xl border bg-card/60 p-3.5">
+          <div className="flex min-w-0 flex-1 flex-col gap-1.5 sm:max-w-56">
+            <Label htmlFor="staff-dashboard-month" className="text-xs text-muted-foreground">
+              Bill month
+            </Label>
+            <Input
+              id="staff-dashboard-month"
+              type="month"
+              value={selectedMonth}
+              min="1000-01"
+              max="9999-12"
+              className="h-10 rounded-xl bg-background"
+              disabled={pendingTransition}
+              onChange={(event) => applyMonth(event.target.value)}
+            />
+          </div>
+          <div className="shrink-0 text-right" aria-live="polite">
+            <p className="flex items-center justify-end gap-1.5 text-xs text-muted-foreground">
+              <FileText className="size-3.5" />
+              Total bills
+            </p>
+            <p className="mt-1 text-2xl font-semibold tabular-nums">
+              {pendingTransition ? <Loader2 className="ml-auto size-5 animate-spin" /> : monthlyBillCount}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Filters */}
       <div className="flex flex-col gap-3 rounded-xl border bg-card/60 p-3.5">
         <button

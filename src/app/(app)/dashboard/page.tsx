@@ -33,6 +33,7 @@ function buildMonthBuckets(anchorDate: Date, count = 12): MonthSpendPoint[] {
 type SearchParams = Promise<{
   categoryId?: string;
   from?: string;
+  month?: string;
   to?: string;
 }>;
 
@@ -57,6 +58,18 @@ export default async function DashboardPage({
       : {};
 
   const now = new Date();
+  const defaultMonth = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+  }).format(now);
+  const requestedMonth = params.month ?? "";
+  const selectedMonth = /^[1-9]\d{3}-(0[1-9]|1[0-2])$/.test(requestedMonth)
+    ? requestedMonth
+    : defaultMonth;
+  const [selectedYear, selectedMonthNumber] = selectedMonth.split("-").map(Number);
+  const selectedMonthStart = new Date(Date.UTC(selectedYear, selectedMonthNumber - 1, 1));
+  const selectedMonthEnd = new Date(Date.UTC(selectedYear, selectedMonthNumber, 1));
 
   // Robust date parsing: prevent Invalid Date exceptions in Prisma
   let from: Date | undefined;
@@ -96,7 +109,7 @@ export default async function DashboardPage({
   }
 
   // Streamlined fast queries: fetch report invoices with joins and categories in parallel
-  const [allCategories, reportInvoices, projectsCount] = await Promise.all([
+  const [allCategories, reportInvoices, projectsCount, monthlyBillCount] = await Promise.all([
     db.category.findMany({
       orderBy: { name: "asc" },
       select: { id: true, name: true },
@@ -119,6 +132,14 @@ export default async function DashboardPage({
       : session.user.role === "STAFF"
         ? Promise.resolve(projectScope.projects.length)
         : db.project.count(),
+    session.user.role === "STAFF"
+      ? db.invoice.count({
+          where: {
+            ...projectFilter,
+            invoiceDate: { gte: selectedMonthStart, lt: selectedMonthEnd },
+          },
+        })
+      : Promise.resolve(0),
   ]);
 
   let revenue = 0;
@@ -254,6 +275,7 @@ export default async function DashboardPage({
       </div>
 
       <DashboardView
+        role={session.user.role}
         revenue={revenue}
         paid={paid}
         pending={pending}
@@ -261,6 +283,8 @@ export default async function DashboardPage({
         overdueCount={overdueCount}
         projectsCount={projectsCount}
         clientsCount={clientsCount}
+        monthlyBillCount={monthlyBillCount}
+        selectedMonth={selectedMonth}
         monthlySpend={monthlySpend}
         categorySpend={categorySpend}
         statusBreakdown={statusBreakdown}
