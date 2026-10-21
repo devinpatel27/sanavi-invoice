@@ -84,14 +84,16 @@ export async function createCategoryInline(input: {
 }) {
   const session = await requireUser();
 
-  const name = input.name.trim();
+  const name = input.name.trim().toUpperCase();
   if (!name) throw new AppError("VALIDATION_001", "Category name is required");
 
-  const existing = await db.category.findUnique({ where: { name } });
+  const existing = await db.category.findFirst({
+    where: { name: { equals: name, mode: "insensitive" } },
+  });
   if (existing) return existing;
 
   const created = await db.category.create({
-    data: { name, unit: input.unit?.trim() || null },
+    data: { name, unit: input.unit?.trim().toUpperCase() || null },
   });
 
   await logActivity({

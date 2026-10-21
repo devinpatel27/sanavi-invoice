@@ -14,9 +14,12 @@ const categorySchema = z.object({
 export async function createCategory(formData: FormData) {
   const user = await requirePermission("category:manage");
 
+  const rawName = String(formData.get("name") ?? "").trim().toUpperCase();
+  const rawUnit = String(formData.get("unit") ?? "").trim().toUpperCase();
+
   const parsed = categorySchema.parse({
-    name: formData.get("name"),
-    unit: formData.get("unit") || undefined,
+    name: rawName,
+    unit: rawUnit || undefined,
   });
 
   const created = await db.category.create({ data: parsed });

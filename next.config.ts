@@ -5,6 +5,10 @@ const nextConfig: NextConfig = {
   // deps). CI builds it, the host only runs `node .next/standalone/server.js`
   // — no build or full install needed on the server.
   output: "standalone",
+  compress: true,
+  experimental: {
+    optimizePackageImports: ["lucide-react", "recharts", "@base-ui/react"],
+  },
   // Allow Cloudflare Tunnel hosts to load Next.js client JS in development.
   // Without this, the tunnel page gets HTML but no JS → form falls back to GET
   // and auth appears to "bounce" back to /login.

@@ -80,7 +80,7 @@ export function UploadDropzone({
   const dragDepth = useRef(0);
 
   const categoryItems = useMemo(
-    () => categories.map((c) => ({ value: c.id, label: c.name })),
+    () => categories.map((c) => ({ value: c.id, label: c.name.toUpperCase() })),
     [categories]
   );
   const selectedCategory = useMemo(
@@ -292,7 +292,7 @@ export function UploadDropzone({
             <SelectContent align="start" alignItemWithTrigger={false}>
               {categories.map((category) => (
                 <SelectItem key={category.id} value={category.id}>
-                  {category.name}
+                  {category.name.toUpperCase()}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -328,9 +328,9 @@ export function UploadDropzone({
               id="new-category"
               value={newCategoryName}
               disabled={busy || creatingCategory}
-              placeholder="e.g. Tile Adhesive"
-              className="h-11 flex-1 rounded-xl"
-              onChange={(e) => setNewCategoryName(e.target.value)}
+              placeholder="e.g. TILE ADHESIVE"
+              className="h-11 flex-1 rounded-xl uppercase"
+              onChange={(e) => setNewCategoryName(e.target.value.toUpperCase())}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   e.preventDefault();

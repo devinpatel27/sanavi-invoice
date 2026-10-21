@@ -23,6 +23,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 import {
   confirmInvoiceReview,
   createCategoryInline,
@@ -50,7 +51,22 @@ export type CustomTaxLine = {
   id: string;
   title: string;
   amount: number;
+  rawAmount?: string;
 };
+
+const TAX_PRESET_OPTIONS = [
+  { value: "ROUND OFF", label: "ROUND OFF (±)" },
+  { value: "DISCOUNT", label: "DISCOUNT (-)" },
+  { value: "TDS", label: "TDS (-)" },
+  { value: "TCS", label: "TCS (+)" },
+  { value: "CESS", label: "CESS (+)" },
+  { value: "FREIGHT", label: "FREIGHT / TRANSPORT (+)" },
+  { value: "LOADING / UNLOADING", label: "LOADING / UNLOADING (+)" },
+  { value: "LABOUR CHARGES", label: "LABOUR CHARGES (+)" },
+  { value: "RCM", label: "RCM (REVERSE CHARGE)" },
+  { value: "INSURANCE", label: "INSURANCE (+)" },
+  { value: "CUSTOM", label: "CUSTOM / OTHER..." },
+];
 
 export type ReviewInvoice = {
   id: string;
@@ -167,13 +183,14 @@ export function ReviewForm({
     setTotal(val);
   }
 
-  function addCustomTax() {
+  function addCustomTax(defaultTitle = "") {
     setCustomTaxes((prev) => [
       ...prev,
       {
         id: `ctax-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-        title: "",
+        title: defaultTitle.toUpperCase(),
         amount: 0,
+        rawAmount: "",
       },
     ]);
   }
@@ -190,6 +207,41 @@ export function ReviewForm({
       });
       setTotal(round2(subtotal + sgst + cgst + igst + getCustomTaxesSum(next)));
       return next;
+    });
+  }
+
+  function handleTaxAmountChange(id: string, inputVal: string) {
+    if (inputVal === "" || inputVal === "-") {
+      updateCustomTax(id, { amount: 0, rawAmount: inputVal });
+      return;
+    }
+    const clean = inputVal.replace(/[^0-9.-]/g, "");
+    const normalized = clean.startsWith("-")
+      ? "-" + clean.slice(1).replace(/-/g, "")
+      : clean.replace(/-/g, "");
+    const num = parseFloat(normalized);
+    updateCustomTax(id, {
+      amount: isNaN(num) ? 0 : num,
+      rawAmount: normalized,
+    });
+  }
+
+  function toggleTaxSign(id: string) {
+    const tax = customTaxes.find((t) => t.id === id);
+    if (!tax) return;
+    const currentNum = Number(tax.amount) || 0;
+    const nextNum = currentNum === 0 ? 0 : -currentNum;
+    let nextRaw = "";
+    if (tax.rawAmount?.startsWith("-")) {
+      nextRaw = tax.rawAmount.slice(1);
+    } else if (tax.rawAmount) {
+      nextRaw = "-" + tax.rawAmount;
+    } else {
+      nextRaw = nextNum === 0 ? "-" : String(nextNum);
+    }
+    updateCustomTax(id, {
+      amount: nextNum,
+      rawAmount: nextRaw,
     });
   }
 
@@ -246,7 +298,7 @@ export function ReviewForm({
   async function handleCreateCategory() {
     if (!newCategoryName.trim()) return;
     try {
-      const created = await createCategoryInline({ name: newCategoryName });
+      const created = await createCategoryInline({ name: newCategoryName.trim().toUpperCase() });
       setCategories((prev) =>
         [...prev, created].sort((a, b) => a.name.localeCompare(b.name))
       );
@@ -512,7 +564,7 @@ export function ReviewForm({
             <Select
               value={categoryId || null}
               onValueChange={(value) => setCategoryId(value ?? "")}
-              items={categories.map((c) => ({ value: c.id, label: c.name }))}
+              items={categories.map((c) => ({ value: c.id, label: c.name.toUpperCase() }))}
             >
               <SelectTrigger id="categoryId" className="w-full">
                 <SelectValue placeholder="Select category…" />
@@ -520,7 +572,7 @@ export function ReviewForm({
               <SelectContent align="start">
                 {categories.map((c) => (
                   <SelectItem key={c.id} value={c.id}>
-                    {c.name}
+                    {c.name.toUpperCase()}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -531,9 +583,10 @@ export function ReviewForm({
               <Label htmlFor="newCategory">Create category (STAFF allowed)</Label>
               <Input
                 id="newCategory"
-                placeholder="e.g. Electrical"
+                placeholder="e.g. ELECTRICALS"
                 value={newCategoryName}
-                onChange={(e) => setNewCategoryName(e.target.value)}
+                onChange={(e) => setNewCategoryName(e.target.value.toUpperCase())}
+                className="uppercase"
               />
             </div>
             <Button
@@ -839,61 +892,152 @@ export function ReviewForm({
           </div>
 
           {/* Custom / Additional Taxes & Charges Section */}
-          <div className="rounded-xl border border-dashed border-border/80 bg-muted/20 p-3.5 space-y-3">
-            <div className="flex items-center justify-between">
+          <div className="rounded-xl border border-dashed border-border/80 bg-muted/20 p-3.5 space-y-3.5">
+            <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="text-xs font-semibold text-foreground">Additional Taxes &amp; Charges</p>
-                <p className="text-[11px] text-muted-foreground">Add specific taxes (e.g. TDS, Cess, Freight GST, RCM, TCS) for this invoice</p>
+                <p className="text-xs font-semibold text-foreground">Additional Taxes &amp; Charges / Rounding</p>
+                <p className="text-[11px] text-muted-foreground">
+                  Add taxes, deductions (e.g. TDS, Discount), or round-off adjustments (e.g. -0.06 or +0.15)
+                </p>
               </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={addCustomTax}
-                className="h-8 gap-1.5 text-xs rounded-lg font-medium"
-              >
-                <Plus className="size-3.5" />
-                Add Tax / Charge
-              </Button>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => addCustomTax("ROUND OFF")}
+                  className="h-7 gap-1 text-[11px] rounded-lg font-medium"
+                >
+                  <Plus className="size-3" />
+                  Round Off (±)
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => addCustomTax("DISCOUNT")}
+                  className="h-7 gap-1 text-[11px] rounded-lg font-medium"
+                >
+                  <Plus className="size-3" />
+                  Discount (-)
+                </Button>
+                <Button
+                  type="button"
+                  variant="default"
+                  size="sm"
+                  onClick={() => addCustomTax()}
+                  className="h-7 gap-1.5 text-xs rounded-lg font-medium"
+                >
+                  <Plus className="size-3.5" />
+                  Add Tax / Charge
+                </Button>
+              </div>
             </div>
 
             {customTaxes.length > 0 && (
-              <div className="space-y-2 pt-1">
-                {customTaxes.map((tax) => (
-                  <div key={tax.id} className="flex items-center gap-2">
-                    <Input
-                      placeholder="Tax Title (e.g. TDS, CESS, FREIGHT)"
-                      value={tax.title}
-                      onChange={(e) => updateCustomTax(tax.id, { title: e.target.value })}
-                      className="h-9 flex-1 uppercase text-xs"
-                    />
-                    <div className="w-36">
-                      <Input
-                        type="number"
-                        step="any"
-                        placeholder="Amount (₹)"
-                        value={tax.amount === 0 ? "" : tax.amount}
-                        onFocus={(e) => e.target.select()}
-                        onChange={(e) =>
-                          updateCustomTax(tax.id, {
-                            amount: e.target.value === "" ? 0 : Number(e.target.value),
-                          })
-                        }
-                        className="h-9 text-xs"
-                      />
-                    </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={() => removeCustomTax(tax.id)}
-                      className="size-8 text-muted-foreground hover:text-destructive shrink-0"
-                      title="Remove tax line"
+              <div className="space-y-3 pt-1">
+                {customTaxes.map((tax) => {
+                  const isNegative = tax.amount < 0 || (tax.rawAmount?.startsWith("-") ?? false);
+                  const displayValue = tax.rawAmount !== undefined ? tax.rawAmount : tax.amount === 0 ? "" : String(tax.amount);
+                  const isPreset = TAX_PRESET_OPTIONS.some((opt) => opt.value === tax.title);
+
+                  return (
+                    <div
+                      key={tax.id}
+                      className="rounded-xl border border-border/70 bg-card p-3 shadow-xs space-y-2.5 sm:space-y-0 sm:flex sm:items-center sm:gap-2.5"
                     >
-                      <Trash2 className="size-3.5" />
-                    </Button>
-                  </div>
-                ))}
+                      {/* Dropdown Preset Selector */}
+                      <div className="w-full sm:w-44 shrink-0">
+                        <Label className="text-[10px] text-muted-foreground font-medium sm:hidden mb-1 block">
+                          Type / Preset
+                        </Label>
+                        <Select
+                          value={isPreset ? tax.title : "CUSTOM"}
+                          onValueChange={(val) => {
+                            if (val && val !== "CUSTOM") {
+                              updateCustomTax(tax.id, { title: val });
+                            }
+                          }}
+                          items={TAX_PRESET_OPTIONS}
+                        >
+                          <SelectTrigger className="h-9 w-full text-xs font-medium">
+                            <SelectValue placeholder="Preset…" />
+                          </SelectTrigger>
+                          <SelectContent align="start">
+                            {TAX_PRESET_OPTIONS.map((opt) => (
+                              <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                                {opt.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {/* Tax Title Input - wrapped and fully visible */}
+                      <div className="flex-1 min-w-0">
+                        <Label className="text-[10px] text-muted-foreground font-medium sm:hidden mb-1 block">
+                          Tax Title / Description
+                        </Label>
+                        <Input
+                          placeholder="TITLE (e.g. ROUND OFF, TDS, CESS)"
+                          value={tax.title}
+                          onChange={(e) => updateCustomTax(tax.id, { title: e.target.value })}
+                          className="h-9 w-full uppercase text-xs font-medium"
+                        />
+                      </div>
+
+                      {/* Amount Input with +/- Toggle Button and Delete */}
+                      <div className="flex items-center gap-2 w-full sm:w-auto">
+                        <div className="relative flex-1 sm:w-40">
+                          <Label className="text-[10px] text-muted-foreground font-medium sm:hidden mb-1 block">
+                            Amount (₹) — minus values allowed
+                          </Label>
+                          <div className="relative">
+                            <Input
+                              type="text"
+                              inputMode="decimal"
+                              placeholder="0.00 (e.g. -0.06)"
+                              value={displayValue}
+                              onFocus={(e) => e.target.select()}
+                              onChange={(e) => handleTaxAmountChange(tax.id, e.target.value)}
+                              className={cn(
+                                "h-9 text-xs font-mono pr-14",
+                                isNegative && "text-red-600 font-bold dark:text-red-400"
+                              )}
+                            />
+                            {/* Toggle sign button */}
+                            <button
+                              type="button"
+                              onClick={() => toggleTaxSign(tax.id)}
+                              title={isNegative ? "Switch to positive (+)" : "Switch to negative (-)"}
+                              className={cn(
+                                "absolute right-1 top-1 h-7 px-1.5 rounded text-[10px] font-bold transition-colors",
+                                isNegative
+                                  ? "bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-950 dark:text-red-300"
+                                  : "bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground"
+                              )}
+                            >
+                              {isNegative ? "– MINUS" : "+ PLUS"}
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1 shrink-0 pt-0 sm:pt-0 mt-auto">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
+                            onClick={() => removeCustomTax(tax.id)}
+                            className="size-9 text-muted-foreground hover:text-destructive shrink-0"
+                            title="Remove tax line"
+                          >
+                            <Trash2 className="size-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>

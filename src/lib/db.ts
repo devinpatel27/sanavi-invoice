@@ -11,9 +11,11 @@ const pool =
   globalForPrisma.pool ??
   new Pool({
     connectionString: process.env.DATABASE_URL,
-    max: 10,
-    idleTimeoutMillis: 30000,
+    max: 20,
+    idleTimeoutMillis: 60000,
     connectionTimeoutMillis: 10000,
+    keepAlive: true,
+    keepAliveInitialDelayMillis: 10000,
   });
 
 // Handle idle client errors so unexpected database disconnects don't crash Node process
