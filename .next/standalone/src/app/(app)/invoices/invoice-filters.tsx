@@ -147,7 +147,7 @@ export function InvoiceFilters({
   ];
   const categoryItems = [
     { value: "ALL", label: "All categories" },
-    ...categories.map((c) => ({ value: c.id, label: c.name })),
+    ...categories.map((c) => ({ value: c.id, label: c.name.toUpperCase() })),
   ];
 
   return (

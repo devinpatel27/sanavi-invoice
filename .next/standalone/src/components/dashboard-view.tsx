@@ -233,7 +233,7 @@ export function DashboardView({
   const categoryItems = useMemo(
     () => [
       { value: "ALL", label: "All categories" },
-      ...categories.map((c) => ({ value: c.id, label: c.name })),
+      ...categories.map((c) => ({ value: c.id, label: c.name.toUpperCase() })),
     ],
     [categories]
   );

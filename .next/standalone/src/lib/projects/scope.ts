@@ -1,10 +1,11 @@
+import { cache } from "react";
 import { cookies } from "next/headers";
 import { db } from "@/lib/db";
 import { projectAccessWhere, type ProjectUser } from "@/lib/projects/access";
 
 export const PROJECT_SCOPE_COOKIE = "sanvicasa-project";
 
-export async function getProjectScope(user: ProjectUser) {
+export const getProjectScope = cache(async (user: ProjectUser) => {
   const projects = await db.project.findMany({
     where: projectAccessWhere(user),
     orderBy: [{ status: "asc" }, { name: "asc" }],
@@ -19,5 +20,5 @@ export async function getProjectScope(user: ProjectUser) {
       : projects[0]?.id ?? null;
 
   return { projects, selectedProjectId };
-}
+});
 

@@ -41,11 +41,11 @@ export default async function CategoriesPage() {
           <form action={createCategory} className="grid gap-4 sm:grid-cols-2">
             <div className="grid gap-2">
               <Label htmlFor="name">Name</Label>
-              <Input id="name" name="name" required />
+              <Input id="name" name="name" required className="uppercase" placeholder="e.g. ELECTRICALS" />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="unit">Default unit</Label>
-              <Input id="unit" name="unit" placeholder="NOS, BAG, KG..." />
+              <Input id="unit" name="unit" placeholder="NOS, BAG, KG..." className="uppercase" />
             </div>
             <div className="sm:col-span-2">
               <Button type="submit">Add category</Button>
