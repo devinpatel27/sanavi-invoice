@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PaymentCustomDetails } from "@/components/payment-custom-details";
 import { db } from "@/lib/db";
 import { auth } from "@/lib/auth";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -113,6 +114,7 @@ export default async function PaymentsPage() {
                         <Badge variant="outline" className="text-[10px] px-1.5 py-0">
                           {payment.mode ?? "Other"}
                         </Badge>
+                        <PaymentCustomDetails fields={payment.customFields} />
                       </div>
                       {session.user.role === "ADMIN" && (
                         <PaymentDeleteButton invoiceId={payment.invoiceId} paymentId={payment.id} />
@@ -134,7 +136,7 @@ export default async function PaymentsPage() {
                         <TableCell>{payment.invoice.vendor.name}</TableCell>
                         <TableCell>{payment.invoice.category?.name ?? "—"}</TableCell>
                         <TableCell><Badge variant="outline">{payment.mode ?? "Other"}</Badge></TableCell>
-                        <TableCell className="text-muted-foreground">{payment.reference ?? "—"}</TableCell>
+                        <TableCell className="max-w-xs whitespace-normal text-muted-foreground">{payment.reference ?? "—"}<PaymentCustomDetails fields={payment.customFields} /></TableCell>
                         <TableCell className="text-right font-medium tabular-nums">{formatCurrency(Number(payment.amount))}</TableCell>
                         <TableCell className="text-right">{session.user.role === "ADMIN" && <PaymentDeleteButton invoiceId={payment.invoiceId} paymentId={payment.id} />}</TableCell>
                       </TableRow>

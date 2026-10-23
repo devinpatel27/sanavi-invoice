@@ -1,6 +1,6 @@
 {
   "node": {
-    "406961d6f7ffcf80ac64b68e336e953f1268b0ff14": {
+    "405de54d31a7498a367e2a0a08fec22a0bdecea5ed": {
       "workers": {
         "app/(app)/projects/[id]/page": {
           "moduleId": 906170,

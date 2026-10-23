@@ -1567,6 +1567,7 @@ export const PaymentScalarFieldEnum = {
   mode: 'mode',
   reference: 'reference',
   notes: 'notes',
+  customFields: 'customFields',
   paidById: 'paidById',
   createdAt: 'createdAt'
 } as const

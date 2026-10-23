@@ -161,6 +161,7 @@ export default async function InvoiceReviewPage({ params }: PageProps) {
                         {payment.notes}
                       </p>
                     )}
+                    <PaymentCustomDetails fields={payment.customFields} />
                   </div>
                 </div>
               ))}
@@ -171,3 +172,4 @@ export default async function InvoiceReviewPage({ params }: PageProps) {
     </div>
   );
 }
+import { PaymentCustomDetails } from "@/components/payment-custom-details";

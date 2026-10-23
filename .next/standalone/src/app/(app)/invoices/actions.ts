@@ -19,6 +19,10 @@ const paymentSchema = z.object({
   mode: z.string().trim().max(50).optional(),
   reference: z.string().trim().max(100).optional(),
   notes: z.string().trim().max(500).optional(),
+  customFields: z.array(z.object({
+    label: z.string().trim().min(1).max(80),
+    value: z.string().trim().min(1).max(500),
+  })).max(20).optional(),
 });
 
 export async function recordInvoicePayment(input: {
@@ -28,6 +32,7 @@ export async function recordInvoicePayment(input: {
   mode?: string;
   reference?: string;
   notes?: string;
+  customFields?: { label: string; value: string }[];
 }) {
   const user = await requirePermission("payment:create");
 
@@ -79,6 +84,7 @@ export async function recordInvoicePayment(input: {
         mode: parsed.data.mode || null,
         reference: parsed.data.reference || null,
         notes: parsed.data.notes || null,
+        customFields: parsed.data.customFields ?? [],
         paidById: user.id,
       },
     });

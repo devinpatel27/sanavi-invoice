@@ -216,6 +216,7 @@ model Payment {
   mode      String? // NEFT, cheque, UPI...
   reference String?
   notes     String?
+  customFields Json?
   paidById  String?
   createdAt DateTime @default(now())
 
