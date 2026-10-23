@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
-import { CreditCard, Loader2, Printer } from "lucide-react";
+import { CreditCard, Loader2, Plus, Printer, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter,
@@ -67,6 +67,7 @@ export function InvoicePaymentControls({
   const [mode, setMode] = useState("BANK_TRANSFER");
   const [reference, setReference] = useState("");
   const [notes, setNotes] = useState("");
+  const [customFields, setCustomFields] = useState<{ id: string; label: string; value: string }[]>([]);
   const canPay = balance > 0.009 &&
     ["UNPAID", "PARTIALLY_PAID", "OVERDUE"].includes(status);
 
@@ -75,9 +76,13 @@ export function InvoicePaymentControls({
       try {
         await recordInvoicePayment({
           invoiceId, amount: Number(amount), paidOn, mode, reference, notes,
+          customFields: customFields
+            .filter((field) => field.label.trim() || field.value.trim())
+            .map(({ label, value }) => ({ label, value })),
         });
         toast.success("Payment recorded");
         setOpen(false);
+        setCustomFields([]);
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Payment failed");
       }
@@ -190,6 +195,58 @@ export function InvoicePaymentControls({
                     ))}
                   </Tabs>
                 </div>
+                <div className="grid gap-3 sm:col-span-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-medium">Custom details</span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={pending || customFields.length >= 20}
+                      onClick={() => setCustomFields((fields) => [...fields, { id: crypto.randomUUID(), label: "", value: "" }])}
+                    >
+                      <Plus className="size-4" /> Add field
+                    </Button>
+                  </div>
+                  {customFields.map((field) => (
+                    <div key={field.id} className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-end gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+                      <div className="grid min-w-0 gap-1.5">
+                        <Label htmlFor={`payment-label-${field.id}`}>Label</Label>
+                        <Input
+                          id={`payment-label-${field.id}`}
+                          placeholder="e.g. TDS"
+                          maxLength={80}
+                          value={field.label}
+                          disabled={pending}
+                          onChange={(event) => setCustomFields((fields) => fields.map((item) => item.id === field.id ? { ...item, label: event.target.value } : item))}
+                        />
+                      </div>
+                      <div className="col-start-1 grid min-w-0 gap-1.5 sm:col-start-auto">
+                        <Label htmlFor={`payment-value-${field.id}`}>Value</Label>
+                        <Input
+                          id={`payment-value-${field.id}`}
+                          placeholder="Enter value"
+                          maxLength={500}
+                          value={field.value}
+                          disabled={pending}
+                          onChange={(event) => setCustomFields((fields) => fields.map((item) => item.id === field.id ? { ...item, value: event.target.value } : item))}
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="col-start-2 row-start-2 sm:col-start-auto sm:row-start-auto"
+                        aria-label={`Remove ${field.label || "custom field"}`}
+                        title="Remove custom field"
+                        disabled={pending}
+                        onClick={() => setCustomFields((fields) => fields.filter((item) => item.id !== field.id))}
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
                 <div className="grid gap-2 sm:col-span-2">
                   <Label htmlFor={`notes-${invoiceId}`}>Notes</Label>
                   <Input
@@ -208,6 +265,7 @@ export function InvoicePaymentControls({
                   type="button"
                   disabled={
                     pending ||
+                    customFields.some((field) => (field.label.trim() || field.value.trim()) && (!field.label.trim() || !field.value.trim())) ||
                     !paidOn ||
                     Number(amount) <= 0 ||
                     Number(amount) > balance + 0.01

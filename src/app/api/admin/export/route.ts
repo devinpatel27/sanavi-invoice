@@ -74,7 +74,7 @@ async function loadData(): Promise<Record<Dataset, ExportRow[]>> {
     payments: payments.map((row) => ({
       id: row.id, invoiceId: row.invoiceId, invoiceNumber: row.invoice.invoiceNumber,
       amount: decimalValue(row.amount), paidOn: row.paidOn, mode: row.mode, reference: row.reference,
-      notes: row.notes, paidBy: row.paidBy?.email ?? null, createdAt: row.createdAt,
+      notes: row.notes, customFields: row.customFields ? JSON.stringify(row.customFields) : null, paidBy: row.paidBy?.email ?? null, createdAt: row.createdAt,
     })),
     vendors: vendors.map((row) => ({ ...row })),
     categories: categories.map((row) => ({ ...row })),
