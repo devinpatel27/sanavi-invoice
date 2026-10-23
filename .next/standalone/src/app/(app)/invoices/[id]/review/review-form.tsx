@@ -56,12 +56,14 @@ export type CustomTaxLine = {
 
 const TAX_PRESET_OPTIONS = [
   { value: "ROUND OFF", label: "ROUND OFF (±)" },
+  { value: "KANTA CHARGE", label: "KANTA CHARGE (+)" },
+  { value: "LOADING / UNLOADING", label: "LOADING / UNLOADING (+)" },
+  { value: "FREIGHT", label: "FREIGHT / TRANSPORT (+)" },
+  { value: "CARTING", label: "CARTING (+)" },
   { value: "DISCOUNT", label: "DISCOUNT (-)" },
   { value: "TDS", label: "TDS (-)" },
   { value: "TCS", label: "TCS (+)" },
   { value: "CESS", label: "CESS (+)" },
-  { value: "FREIGHT", label: "FREIGHT / TRANSPORT (+)" },
-  { value: "LOADING / UNLOADING", label: "LOADING / UNLOADING (+)" },
   { value: "LABOUR CHARGES", label: "LABOUR CHARGES (+)" },
   { value: "RCM", label: "RCM (REVERSE CHARGE)" },
   { value: "INSURANCE", label: "INSURANCE (+)" },
@@ -190,7 +192,7 @@ export function ReviewForm({
         id: `ctax-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
         title: defaultTitle.toUpperCase(),
         amount: 0,
-        rawAmount: "",
+        rawAmount: defaultTitle.toUpperCase() === "DISCOUNT" ? "-" : "",
       },
     ]);
   }
@@ -202,6 +204,11 @@ export function ReviewForm({
         const updated = { ...t, ...patch };
         if (patch.title !== undefined) {
           updated.title = patch.title.toUpperCase();
+        }
+        if (updated.title === "DISCOUNT") {
+          updated.amount = -Math.abs(updated.amount);
+          const raw = updated.rawAmount ?? String(updated.amount);
+          updated.rawAmount = raw.startsWith("-") ? raw : `-${raw}`;
         }
         return updated;
       });
@@ -954,8 +961,8 @@ export function ReviewForm({
                         <Select
                           value={isPreset ? tax.title : "CUSTOM"}
                           onValueChange={(val) => {
-                            if (val && val !== "CUSTOM") {
-                              updateCustomTax(tax.id, { title: val });
+                            if (val) {
+                              updateCustomTax(tax.id, { title: val === "CUSTOM" ? "" : val });
                             }
                           }}
                           items={TAX_PRESET_OPTIONS}

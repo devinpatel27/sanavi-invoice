@@ -125,10 +125,19 @@ export default async function InvoicesPage({
   const [invoices, vendors, categories] = await Promise.all([
     db.invoice.findMany({
       where,
-      include: {
-        vendor: true,
-        project: true,
-        category: true,
+      select: {
+        id: true,
+        invoiceNumber: true,
+        invoiceDate: true,
+        status: true,
+        total: true,
+        paidAt: true,
+        fileUrl: true,
+        uploadedById: true,
+        projectId: true,
+        vendor: { select: { name: true } },
+        project: { select: { name: true } },
+        category: { select: { name: true } },
         payments: { select: { amount: true } },
       },
       orderBy: [{ status: "asc" }, { invoiceDate: "desc" }],

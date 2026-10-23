@@ -133,6 +133,7 @@ export function MobileBottomBar({ role, name, email }: MobileBottomBarProps) {
               {/* Dashboard */}
               <Link
                 href="/dashboard"
+                prefetch={true}
                 className={cn(
                   "flex flex-1 flex-col items-center justify-center gap-1 py-1 text-[11px] font-medium transition-all duration-150 active:scale-95",
                   pathname === "/dashboard"
@@ -152,6 +153,7 @@ export function MobileBottomBar({ role, name, email }: MobileBottomBarProps) {
               {/* Invoices */}
               <Link
                 href="/invoices"
+                prefetch={true}
                 className={cn(
                   "flex flex-1 flex-col items-center justify-center gap-1 py-1 text-[11px] font-medium transition-all duration-150 active:scale-95",
                   pathname.startsWith("/invoices") && !isUploadActive
@@ -172,6 +174,7 @@ export function MobileBottomBar({ role, name, email }: MobileBottomBarProps) {
               <div className="relative flex flex-1 items-center justify-center">
                 <Link
                   href="/invoices/upload"
+                  prefetch={true}
                   aria-label="Upload Invoice"
                   className={cn(
                     "group relative -top-3.5 flex size-12 flex-col items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/30 ring-4 ring-background transition-all duration-200 active:scale-95 hover:shadow-primary/40 hover:shadow-xl",
@@ -188,6 +191,7 @@ export function MobileBottomBar({ role, name, email }: MobileBottomBarProps) {
               {/* Payments */}
               <Link
                 href="/payments"
+                prefetch={true}
                 className={cn(
                   "flex flex-1 flex-col items-center justify-center gap-1 py-1 text-[11px] font-medium transition-all duration-150 active:scale-95",
                   pathname.startsWith("/payments")
@@ -230,6 +234,7 @@ export function MobileBottomBar({ role, name, email }: MobileBottomBarProps) {
               {/* Dashboard */}
               <Link
                 href="/dashboard"
+                prefetch={true}
                 className={cn(
                   "flex flex-1 flex-col items-center justify-center gap-1 py-1 text-[11px] font-medium transition-all duration-150 active:scale-95",
                   pathname === "/dashboard"
@@ -249,6 +254,7 @@ export function MobileBottomBar({ role, name, email }: MobileBottomBarProps) {
               {/* My Invoices */}
               <Link
                 href="/invoices"
+                prefetch={true}
                 className={cn(
                   "flex flex-1 flex-col items-center justify-center gap-1 py-1 text-[11px] font-medium transition-all duration-150 active:scale-95",
                   pathname.startsWith("/invoices") && !isUploadActive
@@ -269,6 +275,7 @@ export function MobileBottomBar({ role, name, email }: MobileBottomBarProps) {
               <div className="relative flex flex-1 items-center justify-center">
                 <Link
                   href="/invoices/upload"
+                  prefetch={true}
                   aria-label="Upload Invoice"
                   className={cn(
                     "group relative -top-3.5 flex size-13 flex-col items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/30 ring-4 ring-background transition-all duration-200 active:scale-95 hover:shadow-primary/40 hover:shadow-xl",
