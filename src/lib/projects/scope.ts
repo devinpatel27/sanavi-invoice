@@ -5,9 +5,9 @@ import { projectAccessWhere, type ProjectUser } from "@/lib/projects/access";
 
 export const PROJECT_SCOPE_COOKIE = "sanvicasa-project";
 
-export const getProjectScope = cache(async (user: ProjectUser) => {
+const getProjectScopeCached = cache(async (id: string, role: ProjectUser["role"]) => {
   const projects = await db.project.findMany({
-    where: projectAccessWhere(user),
+    where: projectAccessWhere({ id, role }),
     orderBy: [{ status: "asc" }, { name: "asc" }],
     select: { id: true, name: true, status: true },
   });
@@ -15,10 +15,14 @@ export const getProjectScope = cache(async (user: ProjectUser) => {
   const requested = (await cookies()).get(PROJECT_SCOPE_COOKIE)?.value;
   const selectedProjectId = projects.some((project) => project.id === requested)
     ? requested!
-    : user.role === "ADMIN"
+    : role === "ADMIN"
       ? null
       : projects[0]?.id ?? null;
 
   return { projects, selectedProjectId };
 });
+
+export function getProjectScope(user: ProjectUser) {
+  return getProjectScopeCached(user.id, user.role);
+}
 

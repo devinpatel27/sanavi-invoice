@@ -116,7 +116,14 @@ export default async function DashboardPage({
     }),
     db.invoice.findMany({
       where: { ...confirmed, ...projectFilter, ...categoryFilter, ...dateFilter },
-      include: {
+      select: {
+        id: true,
+        invoiceNumber: true,
+        invoiceDate: true,
+        status: true,
+        total: true,
+        categoryId: true,
+        projectId: true,
         vendor: { select: { id: true, name: true } },
         project: { select: { id: true, name: true } },
         category: { select: { id: true, name: true } },

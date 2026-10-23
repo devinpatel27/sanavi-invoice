@@ -11,7 +11,17 @@ import {
 import { Input } from "@/components/ui/input";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { recordInvoicePayment } from "./actions";
+
+const PAYMENT_MODES = [
+  { value: "NEFT", label: "NEFT", referenceLabel: "UTR number", placeholder: "NEFT UTR number" },
+  { value: "RTGS", label: "RTGS", referenceLabel: "UTR number", placeholder: "RTGS UTR number" },
+  { value: "IMPS", label: "IMPS", referenceLabel: "Transaction reference", placeholder: "IMPS transaction reference" },
+  { value: "CHEQUE", label: "Cheque", referenceLabel: "Cheque number", placeholder: "Cheque number" },
+  { value: "BANK_TRANSFER", label: "Bank to bank", referenceLabel: "Bank reference", placeholder: "Bank transfer reference" },
+  { value: "UPI", label: "UPI", referenceLabel: "UPI transaction ID", placeholder: "UPI transaction ID / UTR" },
+] as const;
 
 function today() {
   const now = new Date();
@@ -106,10 +116,10 @@ export function InvoicePaymentControls({
                 </Button>
               }
             />
-            <DialogContent>
+            <DialogContent className="max-h-[90dvh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Record payment</DialogTitle>
-                <DialogDescription>
+                <DialogDescription className="break-words pr-5">
                   {invoiceNumber} · {vendorName} · Balance {formatCurrency(balance)}
                 </DialogDescription>
               </DialogHeader>
@@ -135,23 +145,50 @@ export function InvoicePaymentControls({
                     placeholder="Select payment date"
                   />
                 </div>
-                <div className="grid gap-2">
-                  <Label htmlFor={`mode-${invoiceId}`}>Mode</Label>
-                  <Input
-                    id={`mode-${invoiceId}`}
-                    placeholder="NEFT, UPI, cheque…"
+                <div className="grid min-w-0 gap-2 sm:col-span-2">
+                  <Label id={`mode-${invoiceId}`}>Payment mode</Label>
+                  <Tabs
                     value={mode}
-                    onChange={(e) => setMode(e.target.value)}
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor={`ref-${invoiceId}`}>Reference</Label>
-                  <Input
-                    id={`ref-${invoiceId}`}
-                    placeholder="UTR / cheque number"
-                    value={reference}
-                    onChange={(e) => setReference(e.target.value)}
-                  />
+                    onValueChange={(value) => {
+                      if (typeof value !== "string") return;
+                      setMode(value);
+                      setReference("");
+                    }}
+                  >
+                    <TabsList
+                      aria-labelledby={`mode-${invoiceId}`}
+                      className="grid w-full grid-cols-3 gap-1 group-data-horizontal/tabs:h-auto"
+                    >
+                      {PAYMENT_MODES.map((method) => (
+                        <TabsTrigger
+                          key={method.value}
+                          value={method.value}
+                          disabled={pending}
+                          className="h-10 min-w-0 px-2 text-xs sm:text-sm"
+                        >
+                          {method.label}
+                        </TabsTrigger>
+                      ))}
+                    </TabsList>
+                    {PAYMENT_MODES.map((method) => (
+                      <TabsContent key={method.value} value={method.value} className="pt-2">
+                        <div className="grid gap-2">
+                          <Label htmlFor={`ref-${invoiceId}-${method.value}`}>
+                            {method.referenceLabel} (optional)
+                          </Label>
+                          <Input
+                            id={`ref-${invoiceId}-${method.value}`}
+                            placeholder={method.placeholder}
+                            value={reference}
+                            maxLength={100}
+                            autoComplete="off"
+                            disabled={pending}
+                            onChange={(e) => setReference(e.target.value)}
+                          />
+                        </div>
+                      </TabsContent>
+                    ))}
+                  </Tabs>
                 </div>
                 <div className="grid gap-2 sm:col-span-2">
                   <Label htmlFor={`notes-${invoiceId}`}>Notes</Label>

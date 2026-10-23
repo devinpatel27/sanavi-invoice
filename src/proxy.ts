@@ -48,6 +48,6 @@ export default auth((req) => {
 
 export const config = {
   matcher: [
-    "/((?!api/auth|_next/static|_next/image|favicon.ico|apple-icon.png|manifest.webmanifest|icons/|sanvicasa-logo.png).*)",
+    "/((?!api/auth|_next/static|_next/image|favicon.ico|favicon-16x16.png|favicon-32x32.png|apple-touch-icon.png|apple-icon.png|manifest.webmanifest|icons/|sanvicasa-logo.png).*)",
   ],
 };
